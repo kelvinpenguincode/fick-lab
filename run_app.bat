@@ -3,19 +3,19 @@ setlocal
 cd /d "%~dp0"
 
 if exist ".venv\Scripts\pythonw.exe" (
-    start "" ".venv\Scripts\pythonw.exe" diffusion_app.py
+    start "" ".venv\Scripts\pythonw.exe" launch_splash.py
     exit /b 0
 )
 
 where pyw >nul 2>nul
 if %errorlevel% equ 0 (
-    start "" pyw -3 diffusion_app.py
+    start "" pyw -3 launch_splash.py
     exit /b 0
 )
 
 where pythonw >nul 2>nul
 if %errorlevel% equ 0 (
-    start "" pythonw diffusion_app.py
+    start "" pythonw launch_splash.py
     exit /b 0
 )
 

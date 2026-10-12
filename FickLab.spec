@@ -2,11 +2,11 @@
 
 
 a = Analysis(
-    ['diffusion_app.py'],
+    ['launch_splash.py'],
     pathex=[],
     binaries=[],
     datas=[('github_repo.txt', '.')],
-    hiddenimports=['scenario1', 'scenario2', 'scenario3', 'updater', 'app_version'],
+    hiddenimports=['diffusion_app', 'scenario1', 'scenario2', 'scenario3', 'updater', 'app_version'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -16,11 +16,25 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 
+splash = Splash(
+    'splash.png',
+    binaries=a.binaries,
+    datas=a.datas,
+    text_pos=(48, 352),
+    text_size=12,
+    text_color='#99f6e4',
+    text_default='Starting FickLab…',
+    minify_script=True,
+    always_on_top=True,
+)
+
 exe = EXE(
     pyz,
     a.scripts,
     a.binaries,
     a.datas,
+    splash,
+    splash.binaries,
     [],
     name='FickLab',
     debug=False,
