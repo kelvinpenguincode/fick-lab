@@ -25,9 +25,15 @@ jobs:
         run: python -m PyInstaller --noconfirm --clean FickLab.spec
 
       - name: Attach the exe to the GitHub release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/FickLab.exe
-          generate_release_notes: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          if (-not (Test-Path -LiteralPath dist/FickLab.exe)) {
+            throw "dist/FickLab.exe was not built."
+          }
+          gh release create $env:GITHUB_REF_NAME dist/FickLab.exe --title $env:GITHUB_REF_NAME --generate-notes --verify-tag
+          $asset = gh release view $env:GITHUB_REF_NAME --json assets --jq '.assets[] | select(.name == "FickLab.exe") | .name'
+          if ($asset -ne "FickLab.exe") {
+            throw "FickLab.exe is missing from the release."
+          }
