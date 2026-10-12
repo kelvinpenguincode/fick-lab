@@ -19,7 +19,8 @@ if errorlevel 1 goto :failed
 
 echo.
 echo Build complete: %CD%\dist\FickLab.exe
-echo Copy FickLab.exe anywhere and double-click it to run.
+echo Open FickLab from the Start menu or the desktop shortcut.
+echo That shortcut always runs the installed copy in %%LOCALAPPDATA%%\FickLab.
 pause
 exit /b 0
 

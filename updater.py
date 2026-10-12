@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import ssl
+import subprocess
 import sys
 import tempfile
 import urllib.error
@@ -27,6 +30,117 @@ def application_directory() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
     return Path(__file__).resolve().parent
+
+
+def install_directory() -> Path:
+    override = os.environ.get("FICKLAB_HOME", "").strip()
+    if override:
+        return Path(override)
+    local = os.environ.get("LOCALAPPDATA", "").strip()
+    base = Path(local) if local else Path.home() / "AppData" / "Local"
+    return base / "FickLab"
+
+
+def installed_executable() -> Path:
+    return install_directory() / "FickLab.exe"
+
+
+def _version_file() -> Path:
+    return install_directory() / "version.txt"
+
+
+def _recorded_version() -> str:
+    try:
+        return _version_file().read_text(encoding="ascii").strip()
+    except OSError:
+        return "0"
+
+
+def remember_install() -> None:
+    """Refresh shortcuts and record this build when this process is the installed exe."""
+    if not getattr(sys, "frozen", False):
+        return
+    current = Path(sys.executable).resolve()
+    target = installed_executable()
+    if current != target.resolve():
+        return
+    install_directory().mkdir(parents=True, exist_ok=True)
+    _version_file().write_text(APP_VERSION + "\n", encoding="ascii")
+    ensure_shortcuts(target)
+
+
+def should_handoff() -> bool:
+    """A downloaded or old copy should open the Start-menu install instead."""
+    if not getattr(sys, "frozen", False):
+        return False
+    current = Path(sys.executable).resolve()
+    target = installed_executable()
+    return current != target.resolve()
+
+
+def publish_installed_copy() -> Path:
+    """Place this exe where the shortcuts point, without replacing a newer install."""
+    target = installed_executable()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    source = Path(sys.executable).resolve()
+    installed = _recorded_version()
+    if (not target.exists()) or is_newer(APP_VERSION, installed):
+        shutil.copy2(source, target)
+        _version_file().write_text(APP_VERSION + "\n", encoding="ascii")
+    ensure_shortcuts(target)
+    return target
+
+
+def launch_installed() -> None:
+    target = installed_executable()
+    _detached([str(target)], target.parent)
+
+
+def ensure_shortcuts(target: Path) -> None:
+    """Desktop and Start menu shortcuts. Search for FickLab in the Start menu."""
+    target = target.resolve()
+    command = """
+$desktop = [Environment]::GetFolderPath('Desktop')
+$start = Join-Path $env:APPDATA 'Microsoft\\Windows\\Start Menu\\Programs'
+New-Item -ItemType Directory -Force -Path $start | Out-Null
+$shell = New-Object -ComObject WScript.Shell
+foreach ($path in @(
+    (Join-Path $desktop 'FickLab.lnk'),
+    (Join-Path $start 'FickLab.lnk')
+)) {
+    $shortcut = $shell.CreateShortcut($path)
+    $shortcut.TargetPath = $env:FICKLAB_TARGET
+    $shortcut.WorkingDirectory = Split-Path $env:FICKLAB_TARGET
+    $shortcut.Description = 'FickLab'
+    $shortcut.WindowStyle = 1
+    $shortcut.Save()
+}
+"""
+    environment = os.environ.copy()
+    environment["FICKLAB_TARGET"] = str(target)
+    completed = subprocess.run(
+        ["powershell", "-NoProfile", "-NonInteractive", "-Command", command],
+        env=environment,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        timeout=20,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "shortcut creation failed").strip()
+        raise RuntimeError(detail)
+
+
+def install_executable(source: Path, version: str) -> Path:
+    """Copy a built exe into the Start-menu location. Used after a local build."""
+    target = installed_executable()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if source.resolve() != target.resolve():
+        shutil.copy2(source, target)
+    _version_file().write_text(version.strip() + "\n", encoding="ascii")
+    ensure_shortcuts(target)
+    return target
 
 
 def bundled_directory() -> Path:
@@ -146,47 +260,181 @@ def download_exe(url: str, progress) -> Path:
                 handle.write(chunk)
                 received += len(chunk)
                 progress(received / total if total else None, total or received)
+    with destination.open("rb") as handle:
+        signature = handle.read(2)
+    if signature != b"MZ" or destination.stat().st_size < 1_000_000:
+        destination.unlink(missing_ok=True)
+        raise RuntimeError("GitHub did not return the FickLab program. The download was left unused.")
     return destination
 
 
-def schedule_replacement(downloaded: Path) -> None:
-    """Swap the running exe after this process exits. Windows locks the file until then."""
+def _detached(command: list[str], folder: Path) -> None:
+    subprocess.Popen(
+        command,
+        cwd=str(folder),
+        close_fds=True,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP | getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
+
+
+def _ps_quote(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def schedule_replacement(downloaded: Path, pid: int | None = None, version: str | None = None) -> None:
+    """Replace the installed exe after this process exits, then open that copy."""
     if not getattr(sys, "frozen", False):
         raise RuntimeError("Open FickLab.exe to install an update. The Python source is not replaced automatically.")
-    target = Path(sys.executable).resolve()
-    script = Path(tempfile.gettempdir()) / "ficklab_apply_update.bat"
-    script.write_text(
-        "\r\n".join(
-            [
-                "@echo off",
-                "setlocal",
-                "set TRIES=0",
-                ":retry",
-                f'copy /Y "{downloaded}" "{target}" >nul',
-                "if not errorlevel 1 goto launch",
-                "set /a TRIES+=1",
-                "if %TRIES% GEQ 20 goto failed",
-                "ping 127.0.0.1 -n 2 >nul",
-                "goto retry",
-                ":launch",
-                f'start "" "{target}"',
-                'del "%~f0"',
-                "exit /b 0",
-                ":failed",
-                f'echo FickLab could not replace "{target}".',
-                "echo Close the app completely, then run this update again.",
-                "pause",
-                "exit /b 1",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    import subprocess
-
-    subprocess.Popen(
-        ["cmd", "/c", str(script)],
-        cwd=str(target.parent),
-        close_fds=True,
-        creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+    target = installed_executable()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    script = install_directory() / "apply-update.ps1"
+    log = install_directory() / "update.log"
+    pid = os.getpid() if pid is None else pid
+    downloaded = downloaded.resolve()
+    version_text = (version or "").strip()
+    # PowerShell performs the swap. The running exe stays locked until this
+    # process exits, and a batch file with goto inside parentheses was aborting
+    # before it could start the new copy.
+    body = f"""$ErrorActionPreference = 'Continue'
+$appPid = {int(pid)}
+$target = {_ps_quote(str(target))}
+$downloaded = {_ps_quote(str(downloaded))}
+$log = {_ps_quote(str(log))}
+$version = {_ps_quote(version_text)}
+function Write-Log($message) {{
+    Add-Content -LiteralPath $log -Value $message -Encoding ascii
+}}
+Set-Content -LiteralPath $log -Value "waiting for $appPid" -Encoding ascii
+$form = $null
+$detail = $null
+if ($env:FICKLAB_UPDATE_SILENT -ne '1') {{
+    try {{
+        Add-Type -AssemblyName System.Windows.Forms
+        Add-Type -AssemblyName System.Drawing
+        $form = New-Object System.Windows.Forms.Form
+        $form.Text = 'FickLab'
+        $form.FormBorderStyle = 'FixedSingle'
+        $form.StartPosition = 'CenterScreen'
+        $form.ClientSize = New-Object System.Drawing.Size(560, 220)
+        $form.BackColor = [System.Drawing.Color]::FromArgb(15, 23, 42)
+        $form.ForeColor = [System.Drawing.Color]::FromArgb(248, 250, 252)
+        $form.TopMost = $true
+        $form.ControlBox = $false
+        $form.MaximizeBox = $false
+        $form.MinimizeBox = $false
+        $title = New-Object System.Windows.Forms.Label
+        $title.Text = 'Installing the update'
+        $title.Font = New-Object System.Drawing.Font('Segoe UI', 18, [System.Drawing.FontStyle]::Bold)
+        $title.ForeColor = [System.Drawing.Color]::FromArgb(248, 250, 252)
+        $title.BackColor = $form.BackColor
+        $title.AutoSize = $false
+        $title.Size = New-Object System.Drawing.Size(500, 40)
+        $title.Location = New-Object System.Drawing.Point(30, 36)
+        $detail = New-Object System.Windows.Forms.Label
+        $detail.Text = 'FickLab will reopen from the Start menu shortcut.'
+        $detail.Font = New-Object System.Drawing.Font('Segoe UI', 11)
+        $detail.ForeColor = [System.Drawing.Color]::FromArgb(148, 163, 184)
+        $detail.BackColor = $form.BackColor
+        $detail.AutoSize = $false
+        $detail.Size = New-Object System.Drawing.Size(500, 48)
+        $detail.Location = New-Object System.Drawing.Point(30, 88)
+        $bar = New-Object System.Windows.Forms.ProgressBar
+        $bar.Style = 'Marquee'
+        $bar.MarqueeAnimationSpeed = 30
+        $bar.Size = New-Object System.Drawing.Size(500, 8)
+        $bar.Location = New-Object System.Drawing.Point(30, 160)
+        $form.Controls.Add($title)
+        $form.Controls.Add($detail)
+        $form.Controls.Add($bar)
+        $form.Show()
+        [System.Windows.Forms.Application]::DoEvents()
+    }} catch {{
+        $form = $null
+        Write-Log ("window " + $_.Exception.Message)
+    }}
+}}
+function Pump {{
+    if ($form -ne $null) {{
+        [System.Windows.Forms.Application]::DoEvents()
+    }}
+}}
+$deadline = (Get-Date).AddSeconds(50)
+while ((Get-Date) -lt $deadline) {{
+    $alive = Get-Process -Id $appPid -ErrorAction SilentlyContinue
+    if (-not $alive) {{ break }}
+    Pump
+    Start-Sleep -Milliseconds 300
+}}
+Start-Sleep -Milliseconds 600
+Pump
+Write-Log 'replacing'
+if ($detail -ne $null) {{
+    $detail.Text = 'Replacing the installed FickLab...'
+    Pump
+}}
+$copied = $false
+for ($attempt = 1; $attempt -le 60; $attempt++) {{
+    try {{
+        if (Test-Path -LiteralPath $target) {{
+            Move-Item -LiteralPath $target -Destination ($target + '.old') -Force -ErrorAction Stop
+        }}
+        Copy-Item -LiteralPath $downloaded -Destination $target -Force -ErrorAction Stop
+        $copied = $true
+        break
+    }} catch {{
+        Write-Log ("retry " + $attempt + " " + $_.Exception.Message)
+        Pump
+        Start-Sleep -Milliseconds 500
+    }}
+}}
+if ($copied) {{
+    if ($version -ne '') {{
+        $versionFile = Join-Path (Split-Path -Parent $target) 'version.txt'
+        Set-Content -LiteralPath $versionFile -Value $version -Encoding ascii
+    }}
+    Remove-Item -LiteralPath ($target + '.old') -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $downloaded -Force -ErrorAction SilentlyContinue
+    Write-Log 'starting'
+    try {{
+        Start-Process -FilePath $target -WorkingDirectory (Split-Path -Parent $target)
+        Write-Log 'launched'
+        if ($form -ne $null) {{ $form.Close() }}
+        exit 0
+    }} catch {{
+        Write-Log ("start failed " + $_.Exception.Message)
+    }}
+}}
+Write-Log 'failed'
+$old = $target + '.old'
+if (Test-Path -LiteralPath $old) {{
+    Move-Item -LiteralPath $old -Destination $target -Force -ErrorAction SilentlyContinue
+    try {{
+        Start-Process -FilePath $target -WorkingDirectory (Split-Path -Parent $target)
+        Write-Log 'restored'
+    }} catch {{
+        Write-Log ("restore start failed " + $_.Exception.Message)
+    }}
+}}
+if ($form -ne $null) {{ $form.Close() }}
+exit 1
+"""
+    script.write_text(body, encoding="utf-8-sig")
+    stale = install_directory() / "apply-update.bat"
+    stale.unlink(missing_ok=True)
+    _detached(
+        [
+            "powershell",
+            "-NoProfile",
+            "-STA",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-WindowStyle",
+            "Hidden",
+            "-File",
+            str(script),
+        ],
+        target.parent,
     )

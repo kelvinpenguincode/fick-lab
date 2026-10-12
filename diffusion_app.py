@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import math
+import os
 import queue
 import sys
 import threading
@@ -26,6 +27,7 @@ import app_version
 import scenario1
 import scenario2
 import scenario3
+import splash_window
 import updater
 
 
@@ -63,6 +65,7 @@ class DiffusionApp:
         self.result_queue: queue.Queue = queue.Queue()
         self.notice_queue: queue.Queue = queue.Queue()
         self.update_busy = False
+        self._update_splash = None
         self.fit_in_progress = False
         self._loading_visible = False
         self._loading_after = None
@@ -455,9 +458,9 @@ class DiffusionApp:
             f"{app_version.APP_VERSION}. The next release must be a higher number.\n"
             "3. Commit the change and push a tag such as v1.2.0.\n"
             "4. GitHub builds FickLab.exe and attaches it to that release.\n"
-            "5. In the installed app, Check for updates downloads that file, replaces the exe, and restarts.\n\n"
-            "The version on the release has to be higher than the version inside their exe. "
-            "A copy of github_repo.txt beside FickLab.exe overrides the one built into the app.",
+            "5. In the installed app, Check for updates downloads that file, replaces the Start menu copy, and restarts it.\n\n"
+            "Open FickLab from the Start menu or the desktop shortcut. That is the copy updates replace. "
+            "The version on the release has to be higher than the version inside that copy.",
             parent=self.root,
         )
 
@@ -468,7 +471,7 @@ class DiffusionApp:
         self.update_busy = True
         self.update_button.configure(state="disabled")
         self.status_var.set("Checking for updates…")
-        self._arm_loading("update", 0)
+        self._show_update_splash("Checking for updates", "Looking up the latest GitHub release.")
         threading.Thread(target=self._update_check_worker, daemon=True).start()
 
     def _update_check_worker(self) -> None:
@@ -487,7 +490,11 @@ class DiffusionApp:
                     self.status_var.set(payload)
                 elif kind == "update-progress":
                     self._loading_fraction = payload
-                    self.status_var.set(f"Downloading the update… {payload * 100:.0f}%")
+                    percent = payload * 100
+                    self.status_var.set(f"Downloading the update… {percent:.0f}%")
+                    self._show_update_splash("Downloading the update", "The new FickLab replaces the Start menu copy and restarts.")
+                    if self._update_splash is not None:
+                        self._update_splash.set_progress(payload)
                 elif kind == "update-error":
                     self._end_update_check()
                     self.status_var.set("Could not check for updates.")
@@ -503,9 +510,20 @@ class DiffusionApp:
         except queue.Empty:
             pass
 
+    def _show_update_splash(self, title: str, detail: str) -> None:
+        if self._update_splash is None:
+            self._update_splash = splash_window.SplashWindow(tk.Toplevel(self.root), "update")
+        self._update_splash.set_status(title, detail)
+
+    def _close_update_splash(self) -> None:
+        if self._update_splash is not None:
+            self._update_splash.close()
+            self._update_splash = None
+
     def _end_update_check(self) -> None:
         self.update_busy = False
         self._hide_loading()
+        self._close_update_splash()
         if self.root.winfo_exists():
             self.update_button.configure(state="normal")
 
@@ -544,7 +562,9 @@ class DiffusionApp:
         self.update_button.configure(state="disabled")
         self.status_var.set(f"Downloading version {info.version}…")
         self._loading_fraction = 0.0
-        self._arm_loading("download", 0)
+        self._show_update_splash("Downloading the update", f"Version {info.version} will replace the installed FickLab and restart it.")
+        if self._update_splash is not None:
+            self._update_splash.set_progress(0.0)
         threading.Thread(target=self._download_update_worker, args=(info,), daemon=True).start()
 
     def _download_update_worker(self, info: updater.ReleaseInfo) -> None:
@@ -559,17 +579,22 @@ class DiffusionApp:
         except Exception as error:
             self.notice_queue.put(("update-download-error", f"The download failed. {error}"))
             return
-        self.notice_queue.put(("update-ready", path))
+        self.notice_queue.put(("update-ready", (path, info.version)))
 
-    def _apply_downloaded_update(self, path) -> None:
+    def _apply_downloaded_update(self, payload) -> None:
+        path, version = payload
         self.status_var.set("Restarting into the new version…")
+        self._show_update_splash("Installing the update", "FickLab is closing. The new version opens from the Start menu shortcut.")
+        if self._update_splash is not None:
+            self._update_splash.set_progress(1.0)
+        self.root.update()
         try:
-            updater.schedule_replacement(path)
+            updater.schedule_replacement(path, version=version)
         except Exception as error:
             self._end_update_check()
             messagebox.showerror("Updates", str(error), parent=self.root)
             return
-        self.root.destroy()
+        os._exit(0)
 
     def _build_ui(self) -> None:
         self.header = tk.Frame(self.root, bg=self.p["header"])
