@@ -1,0 +1,4 @@
+numpy
+scipy
+matplotlib
+PyInstaller>=6.0

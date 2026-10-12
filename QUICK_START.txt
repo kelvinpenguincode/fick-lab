@@ -1,0 +1,16 @@
+FickLab for Windows — quick start
+
+1. Double-click FickLab.exe to open the app. Python is not required.
+2. The window opens on an empty profile. Use Browse or Add CSV to load a depth/concentration file.
+3. Select Scenario 1, 2, or 3. Each tab keeps its own fit and selected columns.
+4. Enter the known time and C_0, then set the depth/time/concentration units. Click Fit diffusion profile or press Enter.
+5. Inspect the measured-profile and residual panels; hover a data point for exact values. Use the header switch for dark/light appearance.
+6. Save a high-resolution plot with Save plot image (PNG/SVG/PDF), or a full report with Export results CSV.
+
+Use the tabs to switch between datasets and Close page to remove the current one. Scroll the left input panel if your screen is short; drag the divider between inputs and chart to resize either side. The result cards reflow as the window changes size.
+
+Shortcuts: Ctrl+O adds CSV pages; Enter or Ctrl+Enter fits; Ctrl+Shift+S saves a plot; F11 toggles fullscreen. The File/View/Help menus also have import/export, appearance, and model help. Check for updates, in the header or the Help menu, downloads a newer FickLab.exe from the project's GitHub releases. The exported chart includes D, C_s, R-squared, RMSE, model metadata, and the residual diagnostic.
+
+The plot contains D, C_s, R-squared, and RMSE. The report CSV also contains fit settings, the measured data, predictions, and residuals.
+
+This executable is for Windows. Use the CSV alongside the app when sharing or repeating a fit. Only run software from a trusted source.
