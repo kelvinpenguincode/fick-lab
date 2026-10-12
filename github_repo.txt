@@ -2,3 +2,4 @@
 # Example: kelvi/ficklab
 # The Check for updates button reads this file. A copy beside FickLab.exe
 # overrides the copy built into the app.
+kelvinpenguincode/fick-lab

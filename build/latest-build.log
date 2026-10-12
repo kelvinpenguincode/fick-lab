@@ -1,0 +1,110 @@
+432 INFO: PyInstaller: 6.22.3, contrib hooks: 2026.8
+432 INFO: Python: 3.14.7
+482 INFO: Platform: Windows-11-10.0.26200-SP0
+482 INFO: Python environment: C:\python314
+484 INFO: wrote C:\Users\kelvi\Documents\tamu\FickLab.spec
+489 INFO: Removing temporary files and cleaning cache in C:\Users\kelvi\AppData\Local\pyinstaller
+498 INFO: Module search paths (PYTHONPATH):
+['C:\\Users\\kelvi\\Documents\\tamu',
+ 'C:\\python314\\python314.zip',
+ 'C:\\python314\\DLLs',
+ 'C:\\python314\\Lib',
+ 'C:\\python314',
+ 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages',
+ 'C:\\python314\\Lib\\site-packages',
+ 'C:\\Users\\kelvi\\Documents\\tamu']
+1366 INFO: checking Analysis
+1366 INFO: Building Analysis because Analysis-00.toc is non existent
+1367 INFO: Looking for Python shared library...
+1367 INFO: Using Python shared library: C:\python314\python314.dll
+1367 INFO: Running Analysis Analysis-00.toc
+1367 INFO: Target bytecode optimization level: 0
+1367 INFO: Initializing module dependency graph...
+1370 INFO: Initializing module graph hook caches...
+1399 INFO: Analyzing modules for base_library.zip ...
+4660 INFO: Processing standard module hook 'hook-encodings.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+5901 INFO: Processing standard module hook 'hook-pickle.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+6614 INFO: Processing standard module hook 'hook-math.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+6902 INFO: Processing standard module hook 'hook-difflib.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+6946 INFO: Processing standard module hook 'hook-heapq.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+11803 INFO: Caching module dependency graph...
+11857 INFO: Analyzing C:\Users\kelvi\Documents\tamu\diffusion_app.py
+12010 INFO: Processing pre-find-module-path hook 'hook-tkinter.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks\\pre_find_module_path'
+12014 INFO: TclTkInfo: initializing cached Tcl/Tk info...
+12693 INFO: Processing standard module hook 'hook-_tkinter.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+12889 INFO: Processing standard module hook 'hook-numpy.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+13626 INFO: Processing pre-safe-import-module hook 'hook-typing_extensions.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+13629 INFO: SetuptoolsInfo: initializing cached setuptools info...
+15847 INFO: Processing standard module hook 'hook-platform.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+15926 INFO: Processing standard module hook 'hook-sysconfig.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+15939 INFO: Processing standard module hook 'hook-_ctypes.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+16549 INFO: Processing standard module hook 'hook-webbrowser.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+18698 INFO: Processing standard module hook 'hook-multiprocessing.util.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+18953 INFO: Processing standard module hook 'hook-xml.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+22224 INFO: Processing standard module hook 'hook-matplotlib.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+23117 INFO: Processing pre-safe-import-module hook 'hook-packaging.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+23732 INFO: Processing standard module hook 'hook-matplotlib.backend_bases.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+23991 INFO: Processing standard module hook 'hook-PIL.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+24182 INFO: Processing standard module hook 'hook-PIL.Image.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+25023 INFO: Processing standard module hook 'hook-xml.etree.cElementTree.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+25411 INFO: Processing standard module hook 'hook-PIL.ImageFilter.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+27482 INFO: Processing standard module hook 'hook-matplotlib.backends.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+27721 INFO: Processing standard module hook 'hook-matplotlib.pyplot.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+28006 INFO: Processing standard module hook 'hook-matplotlib.figure.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+29487 INFO: Processing standard module hook 'hook-dateutil.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+29655 INFO: Processing pre-safe-import-module hook 'hook-six.moves.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+33347 INFO: Processing pre-safe-import-module hook 'hook-gi.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+33550 INFO: Processing standard module hook 'hook-scipy.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+35128 INFO: Processing standard module hook 'hook-scipy.special._ufuncs.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+36138 INFO: Processing standard module hook 'hook-scipy.linalg.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+40506 INFO: Processing standard module hook 'hook-scipy.spatial._ckdtree.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+41856 INFO: Processing standard module hook 'hook-scipy.spatial.transform.rotation.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+44141 INFO: Processing standard module hook 'hook-scipy.stats._stats.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+45341 INFO: Processing standard module hook 'hook-scipy.sparse.csgraph.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+47241 INFO: Processing standard module hook 'hook-scipy.special._ellip_harm_2.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+47318 INFO: Processing module hooks (post-graph stage)...
+47337 INFO: Processing standard module hook 'hook-matplotlib.backends.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+47338 INFO: Matplotlib backend selection method: automatic discovery of used backends
+47388 INFO: Discovered Matplotlib backend(s) via `matplotlib.use()` call in module 'scenario1': ['Agg']
+47388 INFO: The following Matplotlib backends were discovered by scanning for `matplotlib.use()` calls: ['Agg']. If your backend of choice is not in this list, either add a `matplotlib.use()` call to your code, or configure the backend collection via hook options (see: https://pyinstaller.org/en/stable/hooks-config.html#matplotlib-hooks).
+48085 INFO: Selected matplotlib backends: ['Agg']
+48085 INFO: Extra dists for selected matplotlib backends: []
+48705 INFO: Processing standard module hook 'hook-PIL.SpiderImagePlugin.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+48838 WARNING: Hidden import "scipy.special._cdflib" not found!
+48932 INFO: Processing standard module hook 'hook-_tkinter.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+48950 INFO: Performing binary vs. data reclassification (209 entries)
+49137 INFO: Looking for ctypes DLLs
+49360 INFO: Analyzing run-time hooks ...
+49367 INFO: Including run-time hook 'pyi_rth_inspect.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks\\rthooks'
+49379 INFO: Including run-time hook 'pyi_rth_pkgutil.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks\\rthooks'
+49384 INFO: Including run-time hook 'pyi_rth_multiprocessing.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks\\rthooks'
+49389 INFO: Including run-time hook 'pyi_rth_mplconfig.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks\\rthooks'
+49393 INFO: Processing pre-find-module-path hook 'hook-_pyi_rth_utils.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks\\pre_find_module_path'
+49398 INFO: Processing standard module hook 'hook-_pyi_rth_utils.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks'
+49421 INFO: Including run-time hook 'pyi_rth__tkinter.py' from 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\hooks\\rthooks'
+49452 INFO: Creating base_library.zip...
+49485 INFO: Looking for dynamic libraries
+54269 INFO: Extra DLL search directories (AddDllDirectory): ['C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy.libs', 'C:\\Users\\kelvi\\AppData\\Roaming\\Python\\Python314\\site-packages\\scipy.libs']
+54269 INFO: Extra DLL search directories (PATH): []
+56877 INFO: Warnings written to C:\Users\kelvi\Documents\tamu\build\FickLab\warn-FickLab.txt
+57028 INFO: Graph cross-reference written to C:\Users\kelvi\Documents\tamu\build\FickLab\xref-FickLab.html
+57117 INFO: checking PYZ
+57117 INFO: Building PYZ because PYZ-00.toc is non existent
+57117 INFO: Building PYZ (ZlibArchive) C:\Users\kelvi\Documents\tamu\build\FickLab\PYZ-00.pyz
+58569 INFO: Building PYZ (ZlibArchive) C:\Users\kelvi\Documents\tamu\build\FickLab\PYZ-00.pyz completed successfully.
+58653 INFO: checking PKG
+58653 INFO: Building PKG because PKG-00.toc is non existent
+58653 INFO: Building PKG (CArchive) FickLab.pkg
+74564 INFO: Building PKG (CArchive) FickLab.pkg completed successfully.
+74587 INFO: Bootloader C:\Users\kelvi\AppData\Roaming\Python\Python314\site-packages\PyInstaller\bootloader\Windows-64bit-intel\runw.exe
+74587 INFO: checking EXE
+74588 INFO: Building EXE because EXE-00.toc is non existent
+74588 INFO: Building EXE from EXE-00.toc
+74609 INFO: Copying bootloader EXE to C:\Users\kelvi\Documents\tamu\dist\FickLab.exe
+74867 INFO: Copying icon to EXE
+75011 INFO: Copying 0 resources to EXE
+75011 INFO: Embedding manifest in EXE
+75151 INFO: Appending PKG archive to EXE
+75443 INFO: Fixing EXE headers
+76902 INFO: Building EXE from EXE-00.toc completed successfully.
+76914 INFO: Build complete! The results are available in: C:\Users\kelvi\Documents\tamu\dist
