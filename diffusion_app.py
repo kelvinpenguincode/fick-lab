@@ -56,12 +56,12 @@ class DiffusionApp:
 
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
-        initial_width = min(1480, max(980, int(screen_width * 0.88)))
-        initial_height = min(940, max(680, int(screen_height * 0.88)))
+        initial_width = min(1280, max(960, int(screen_width * 0.82)))
+        initial_height = min(820, max(620, int(screen_height * 0.82)))
         initial_width = min(initial_width, screen_width - 40)
         initial_height = min(initial_height, screen_height - 80)
         self.root.geometry(f"{initial_width}x{initial_height}")
-        self.root.minsize(min(980, screen_width - 20), min(640, screen_height - 40))
+        self.root.minsize(min(880, screen_width - 20), min(560, screen_height - 40))
 
         self.result_queue: queue.Queue = queue.Queue()
         self.notice_queue: queue.Queue = queue.Queue()
@@ -108,10 +108,15 @@ class DiffusionApp:
         self.temperature_c_var = tk.StringVar(value="")
         self.time_seconds_var = tk.StringVar(value="= 36000 s")
         self.graph_mode = tk.StringVar(value="profile")
+        self.show_project = tk.BooleanVar(value=False)
+        self.show_setup = tk.BooleanVar(value=True)
+        self.show_workbook = tk.BooleanVar(value=False)
+        self.show_metrics = tk.BooleanVar(value=False)
+        self.show_advanced = tk.BooleanVar(value=False)
         self.export_width_in = tk.StringVar(value="10")
         self.export_height_in = tk.StringVar(value="6.5")
         self.export_dpi = tk.StringVar(value="300")
-        self.status_var = tk.StringVar(value="Import a workbook sheet, set time in hours, then fit D.")
+        self.status_var = tk.StringVar(value="Import a sheet, set time in hours, then Fit. Open extra tools from View.")
         self.hint_var = tk.StringVar(value="")
         self.summary_var = tk.StringVar(value="No workbook sheet loaded yet.")
         self.header_workspace_var = tk.StringVar(value="No sheets")
@@ -376,6 +381,7 @@ class DiffusionApp:
         self.header_subtitle.configure(bg=self.p["header"], fg=self.p["header_muted"])
         if hasattr(self, "ribbon"):
             self.ribbon.configure(bg=self.p["header"])
+        self._style_pane_buttons()
         if hasattr(self, "residual_toggle"):
             self.residual_toggle.configure(
                 bg=self.p["card"],
@@ -422,6 +428,12 @@ class DiffusionApp:
         view_menu.add_command(label="Graph 1 · Profile", command=lambda: self._set_graph_mode("profile"))
         view_menu.add_command(label="Graph 2 · ln(D) vs 1/kT", command=lambda: self._set_graph_mode("arrhenius"))
         view_menu.add_separator()
+        view_menu.add_checkbutton(label="Setup", variable=self.show_setup, command=self._sync_panes)
+        view_menu.add_checkbutton(label="Project explorer", variable=self.show_project, command=self._sync_panes)
+        view_menu.add_checkbutton(label="Workbook table", variable=self.show_workbook, command=self._sync_panes)
+        view_menu.add_checkbutton(label="Result cards", variable=self.show_metrics, command=self._sync_panes)
+        view_menu.add_checkbutton(label="Advanced options", variable=self.show_advanced, command=self._sync_panes)
+        view_menu.add_separator()
         view_menu.add_command(label="Toggle dark appearance", command=self._toggle_theme)
         view_menu.add_command(label="Toggle fullscreen", accelerator="F11", command=self._toggle_fullscreen)
         menu.add_cascade(label="View", menu=view_menu)
@@ -464,22 +476,22 @@ class DiffusionApp:
         messagebox.showinfo(
             "Keyboard shortcuts",
             "F1    Tutorial\n"
-            "Ctrl+O    Import workbook sheets\n"
+            "Ctrl+O    Import sheets\n"
             "Ctrl+V    Paste a table into the workbook\n"
             "Enter or Ctrl+Enter    Fit the active sheet\n"
             "Ctrl+Shift+S    Export the graph (choose size)\n"
-            "F11    Toggle fullscreen",
+            "F11    Toggle fullscreen\n\n"
+            "View opens Setup, Project, Table, and Results when you need them.",
             parent=self.root,
         )
 
     def _tutorial_text(self) -> str:
         return (
-            "FickLab 1.5.0 tutorial\n"
-            "The window is laid out like Origin: Project explorer, setup, Graph 1 / Graph 2, and a workbook.\n\n"
+            "FickLab 1.6.0 tutorial\n"
+            "The graph is the main window. Open extra tools from View or the toolbar when you need them.\n\n"
             "1. Import\n"
-            "   File → Import workbook, or the Import ribbon button, or Ctrl+O. Each CSV is a sheet.\n"
-            "   Paste a two-column table (depth, concentration) with Ctrl+V.\n"
-            "   Double-click a workbook cell to edit it, then Apply table to plot.\n\n"
+            "   File → Import, or Import on the toolbar, or Ctrl+O. Each CSV is a sheet.\n"
+            "   Open Table to paste (Ctrl+V) or edit cells, then Apply table to plot.\n\n"
             "2. Time\n"
             "   Enter diffusion time in hours. The app converts to seconds automatically (1 h = 3600 s)\n"
             "   before fitting, so D is in (depth unit)²/s.\n\n"
@@ -762,25 +774,25 @@ class DiffusionApp:
     def _build_ui(self) -> None:
         self.header = tk.Frame(self.root, bg=self.p["header"])
         self.header.pack(fill="x")
-        self.header_mark = tk.Canvas(self.header, width=36, height=36, bg=self.p["header"], highlightthickness=0)
-        self.header_mark.pack(side="left", padx=(18, 12), pady=16)
-        self.header_mark.create_oval(2, 2, 34, 34, fill="#1e293b", outline="")
-        self.header_mark.create_line(8, 24, 14, 18, 20, 20, 28, 10, fill="#2dd4bf", width=2.4, smooth=True, capstyle="round")
-        self.header_mark.create_oval(25, 7, 31, 13, fill="#99f6e4", outline="")
+        self.header_mark = tk.Canvas(self.header, width=28, height=28, bg=self.p["header"], highlightthickness=0)
+        self.header_mark.pack(side="left", padx=(14, 10), pady=8)
+        self.header_mark.create_oval(2, 2, 26, 26, fill="#1e293b", outline="")
+        self.header_mark.create_line(6, 18, 11, 14, 16, 16, 22, 8, fill="#2dd4bf", width=2, smooth=True, capstyle="round")
+        self.header_mark.create_oval(20, 6, 24, 10, fill="#99f6e4", outline="")
         self.header_titles = tk.Frame(self.header, bg=self.p["header"])
-        self.header_titles.pack(side="left", fill="both", expand=True, pady=14)
-        self.header_title = tk.Label(self.header_titles, text="FickLab", bg=self.p["header"], fg=self.p["header_fg"], font=("Segoe UI", 18, "bold"))
+        self.header_titles.pack(side="left", fill="y", pady=8)
+        self.header_title = tk.Label(self.header_titles, text="FickLab", bg=self.p["header"], fg=self.p["header_fg"], font=("Segoe UI", 14, "bold"))
         self.header_title.pack(anchor="w")
         self.header_subtitle = tk.Label(
             self.header_titles,
-            text="Project  ·  Workbooks  ·  Graphs  ·  Fick profile and Arrhenius 1/kT",
+            text="Open tools from View when you need them",
             bg=self.p["header"],
             fg=self.p["header_muted"],
-            font=("Segoe UI", 10),
+            font=("Segoe UI", 9),
             anchor="w",
             justify="left",
         )
-        self.header_subtitle.pack(anchor="w", pady=(2, 0))
+        self.header_subtitle.pack(anchor="w")
         self.theme_button = tk.Button(
             self.header,
             text="Dark mode",
@@ -791,12 +803,12 @@ class DiffusionApp:
             activeforeground=self.p["chip_fg"],
             relief="flat",
             bd=0,
-            padx=12,
-            pady=6,
+            padx=10,
+            pady=4,
             font=("Segoe UI", 9, "bold"),
             cursor="hand2",
         )
-        self.theme_button.pack(side="right", padx=(0, 16), pady=18)
+        self.theme_button.pack(side="right", padx=(0, 12), pady=8)
         self.update_button = tk.Button(
             self.header,
             text="Updates",
@@ -807,63 +819,76 @@ class DiffusionApp:
             activeforeground=self.p["chip_fg"],
             relief="flat",
             bd=0,
-            padx=12,
-            pady=6,
+            padx=10,
+            pady=4,
             font=("Segoe UI", 9, "bold"),
             cursor="hand2",
         )
-        self.update_button.pack(side="right", padx=(0, 8), pady=18)
+        self.update_button.pack(side="right", padx=(0, 6), pady=8)
         self.workspace_chip = tk.Label(
             self.header,
             textvariable=self.header_workspace_var,
             bg=self.p["chip"],
             fg=self.p["chip_fg"],
             font=("Segoe UI", 9),
-            padx=12,
-            pady=6,
+            padx=10,
+            pady=4,
         )
-        self.workspace_chip.pack(side="right", padx=(0, 8), pady=18)
+        self.workspace_chip.pack(side="right", padx=(0, 6), pady=8)
         self.header.bind("<Configure>", self._fit_header_text, add="+")
         self.ribbon = tk.Frame(self.root, bg=self.p["header"])
         self.ribbon.pack(fill="x")
+        actions = self._frame(self.ribbon, "header")
+        actions.pack(side="left", padx=(8, 0), pady=4)
         for text, command in (
             ("Import", self._browse_csv),
-            ("Paste", self._paste_workbook),
-            ("Fit D", self._start_fit),
+            ("Fit", self._start_fit),
             ("1/kT", self._fit_arrhenius),
             ("Profile", lambda: self._set_graph_mode("profile")),
             ("Arrhenius", lambda: self._set_graph_mode("arrhenius")),
-            ("Export graph", self._export_plot),
-            ("Tutorial", self._show_tutorial),
+            ("Export", self._export_plot),
         ):
-            self._button(self.ribbon, text, command, kind="tool").pack(side="left", padx=(10 if text == "Import" else 4, 0), pady=8)
+            self._button(actions, text, command, kind="tool").pack(side="left", padx=(0, 4))
+        tools = self._frame(self.ribbon, "header")
+        tools.pack(side="right", padx=(0, 8), pady=4)
+        self._lbl(tools, "Tools", bg="header", fg="header_muted", size=8).pack(side="left", padx=(0, 6))
+        self.pane_buttons: dict[str, ttk.Button] = {}
+        for key, label, variable in (
+            ("setup", "Setup", self.show_setup),
+            ("project", "Project", self.show_project),
+            ("workbook", "Table", self.show_workbook),
+            ("metrics", "Results", self.show_metrics),
+        ):
+            button = self._button(tools, label, lambda name=key: self._toggle_named_pane(name), kind="tool")
+            button.pack(side="left", padx=(0, 4))
+            self.pane_buttons[key] = button
         self._frame(self.root, "accent", height=2).pack(fill="x")
 
         body = self._frame(self.root, "canvas")
-        body.pack(fill="both", expand=True, padx=8, pady=(6, 4))
+        body.pack(fill="both", expand=True, padx=10, pady=(8, 6))
         body.grid_columnconfigure(0, weight=1)
         body.grid_rowconfigure(1, weight=1)
 
         page_bar = self._frame(body, "canvas")
-        page_bar.grid(row=0, column=0, sticky="ew", pady=(0, 6))
+        page_bar.grid(row=0, column=0, sticky="ew", pady=(0, 8))
         page_bar.grid_columnconfigure(0, weight=1)
         self.tab_row = self._frame(page_bar, "canvas")
         self.tab_row.grid(row=0, column=0, sticky="w")
-        actions = self._frame(page_bar, "canvas")
-        actions.grid(row=0, column=1, sticky="e")
-        self.add_pages_button = self._button(actions, "+ Sheet", self._browse_csv, kind="tool")
+        sheet_actions = self._frame(page_bar, "canvas")
+        sheet_actions.grid(row=0, column=1, sticky="e")
+        self.add_pages_button = self._button(sheet_actions, "+ Sheet", self._browse_csv, kind="tool")
         self.add_pages_button.pack(side="left", padx=(8, 6))
-        self.close_page_button = self._button(actions, "Close sheet", self._close_active_profile, kind="tool")
+        self.close_page_button = self._button(sheet_actions, "Close", self._close_active_profile, kind="tool")
         self.close_page_button.pack(side="left")
 
         self.main_pane = tk.PanedWindow(
-            body, orient="horizontal", sashwidth=6, sashrelief="flat", bd=0, bg=self.p["canvas"], opaqueresize=True
+            body, orient="horizontal", sashwidth=8, sashrelief="flat", bd=0, bg=self.p["canvas"], opaqueresize=True
         )
         self._remember(self.main_pane, bg="canvas")
         self.main_pane.grid(row=1, column=0, sticky="nsew")
 
         explorer_outer = self._frame(self.main_pane, "explorer", highlightthickness=1, highlightbackground=self.p["line"])
-        self._remember(explorer_outer, bg="explorer", highlightbackground="line")
+        self.explorer_outer = self._remember(explorer_outer, bg="explorer", highlightbackground="line")
         self._lbl(explorer_outer, "PROJECT", bg="explorer", fg="muted", size=8, bold=True).pack(fill="x", padx=10, pady=(10, 4))
         self.explorer = ttk.Treeview(explorer_outer, show="tree", selectmode="browse")
         self.explorer.pack(fill="both", expand=True, padx=6, pady=(0, 8))
@@ -881,9 +906,7 @@ class DiffusionApp:
         self.content.grid_columnconfigure(0, weight=1)
         self.content.grid_rowconfigure(1, weight=1)
         self._build_results_area()
-        self.main_pane.add(explorer_outer, minsize=160, width=200)
-        self.main_pane.add(sidebar_outer, minsize=280, width=320)
-        self.main_pane.add(self.content, minsize=520)
+        self._sync_panes()
         self.root.bind_all("<MouseWheel>", self._on_sidebar_mousewheel, add="+")
         self.root.bind_all("<Button-4>", self._on_sidebar_mousewheel, add="+")
         self.root.bind_all("<Button-5>", self._on_sidebar_mousewheel, add="+")
@@ -971,22 +994,35 @@ class DiffusionApp:
         return entry
 
     def _build_sidebar(self) -> None:
-        self._section("Scenario")
+        self._section("Fit")
         self.scenario_combo = ttk.Combobox(
             self.sidebar, textvariable=self.scenario_var, values=list(self.SCENARIOS), state="readonly"
         )
-        self.scenario_combo.pack(fill="x", padx=16)
+        self.scenario_combo.pack(fill="x", padx=16, pady=(0, 4))
         self.scenario_combo.bind("<<ComboboxSelected>>", lambda _event: self._update_scenario_controls())
-        self.scenario_hint_label = self._lbl(self.sidebar, bg="card", fg="muted", size=9, textvariable=self.hint_var, wraplength=280)
-        self.scenario_hint_label.pack(fill="x", padx=16, pady=(8, 0))
+        self.time_entry = self._field("Time  t  (hours)", self.time_var)
+        self.time_seconds_label = self._lbl(self.sidebar, bg="card", fg="muted", size=8, textvariable=self.time_seconds_var)
+        self.time_seconds_label.pack(fill="x", padx=16, pady=(4, 0))
+        self.c0_entry = self._field("Bulk C₀", self.c0_var)
+        temp_row = self._frame(self.sidebar, "card")
+        temp_row.pack(fill="x", padx=16, pady=(10, 0))
+        temp_row.grid_columnconfigure(0, weight=1)
+        temp_row.grid_columnconfigure(1, weight=1)
+        self._lbl(temp_row, "T (K)", bg="card", fg="muted", size=9).grid(row=0, column=0, sticky="w", pady=(0, 3))
+        self._lbl(temp_row, "T (°C)", bg="card", fg="muted", size=9).grid(row=0, column=1, sticky="w", padx=(8, 0), pady=(0, 3))
+        ttk.Entry(temp_row, textvariable=self.temperature_k_var).grid(row=1, column=0, sticky="ew")
+        ttk.Entry(temp_row, textvariable=self.temperature_c_var).grid(row=1, column=1, sticky="ew", padx=(8, 0))
+        self._button(self.sidebar, "Advanced options", lambda: self._toggle_named_pane("advanced"), kind="tool").pack(fill="x", padx=16, pady=(12, 8))
 
-        self._section("Data")
-        file_row = self._frame(self.sidebar, "card")
+        self.advanced_frame = self._frame(self.sidebar, "card")
+        self.scenario_hint_label = self._lbl(self.advanced_frame, bg="card", fg="muted", size=9, textvariable=self.hint_var, wraplength=260)
+        self.scenario_hint_label.pack(fill="x", padx=16, pady=(0, 8))
+        self._lbl(self.advanced_frame, "DATA", bg="card", fg="muted", size=8, bold=True).pack(fill="x", padx=16, pady=(4, 6))
+        file_row = self._frame(self.advanced_frame, "card")
         file_row.pack(fill="x", padx=16)
         ttk.Entry(file_row, textvariable=self.file_var).pack(side="left", fill="x", expand=True)
         self._button(file_row, "Browse", self._browse_csv, kind="tool").pack(side="left", padx=(8, 0))
-
-        columns = self._frame(self.sidebar, "card")
+        columns = self._frame(self.advanced_frame, "card")
         columns.pack(fill="x", padx=16, pady=(8, 0))
         columns.grid_columnconfigure(0, weight=1)
         columns.grid_columnconfigure(1, weight=1)
@@ -998,48 +1034,32 @@ class DiffusionApp:
         self.c_col_combo.grid(row=1, column=1, sticky="ew", padx=(8, 0))
         self.x_col_combo.bind("<<ComboboxSelected>>", lambda _event: self._reload_active_file())
         self.c_col_combo.bind("<<ComboboxSelected>>", lambda _event: self._reload_active_file())
-
-        self.summary_label = self._lbl(self.sidebar, bg="card", fg="ink", size=9, textvariable=self.summary_var, wraplength=280)
+        self.summary_label = self._lbl(self.advanced_frame, bg="card", fg="ink", size=9, textvariable=self.summary_var, wraplength=260)
         self.summary_label.pack(fill="x", padx=16, pady=(10, 0))
-
-        self._section("Known conditions")
-        self.time_entry = self._field("Diffusion time  t  (hours)", self.time_var)
-        self.time_seconds_label = self._lbl(self.sidebar, bg="card", fg="muted", size=8, textvariable=self.time_seconds_var)
-        self.time_seconds_label.pack(fill="x", padx=16, pady=(4, 0))
-        temp_row = self._frame(self.sidebar, "card")
-        temp_row.pack(fill="x", padx=16, pady=(8, 0))
-        temp_row.grid_columnconfigure(0, weight=1)
-        temp_row.grid_columnconfigure(1, weight=1)
-        self._lbl(temp_row, "Temperature T (K)", bg="card", fg="muted", size=9).grid(row=0, column=0, sticky="w", pady=(0, 3))
-        self._lbl(temp_row, "T (°C)", bg="card", fg="muted", size=9).grid(row=0, column=1, sticky="w", padx=(8, 0), pady=(0, 3))
-        ttk.Entry(temp_row, textvariable=self.temperature_k_var).grid(row=1, column=0, sticky="ew")
-        ttk.Entry(temp_row, textvariable=self.temperature_c_var).grid(row=1, column=1, sticky="ew", padx=(8, 0))
-        self._lbl(self.sidebar, f"1/kT uses k = {arrhenius.K_BOLTZMANN_EV:g} eV/K", bg="card", fg="muted", size=8).pack(fill="x", padx=16, pady=(4, 0))
-        self.c0_entry = self._field("Bulk concentration  C₀", self.c0_var)
-        self._button(self.sidebar, "Use deepest points as C₀", self._suggest_c0, kind="tool").pack(fill="x", padx=16, pady=(6, 0))
-        self.cs_entry = self._field("Surface concentration  Cₛ   (Scenario 1)", self.cs_var)
-        self.grid_entry = self._field("Cₛ grid points   (Scenario 3)", self.grid_steps_var)
-
-        units = self._frame(self.sidebar, "card")
-        units.pack(fill="x", padx=16, pady=(10, 12))
+        self._button(self.advanced_frame, "Use deepest points as C₀", self._suggest_c0, kind="tool").pack(fill="x", padx=16, pady=(8, 0))
+        saved_sidebar = self.sidebar
+        self.sidebar = self.advanced_frame
+        self.cs_entry = self._field("Surface Cₛ  (Scenario 1)", self.cs_var)
+        self.grid_entry = self._field("Cₛ grid points  (Scenario 3)", self.grid_steps_var)
+        self.sidebar = saved_sidebar
+        units = self._frame(self.advanced_frame, "card")
+        units.pack(fill="x", padx=16, pady=(10, 4))
         for column in range(3):
             units.grid_columnconfigure(column, weight=1)
-        captions = (("Depth scale", 0, 0), ("Depth unit", 1, 0), ("Concentration unit", 2, 0))
+        captions = (("Depth scale", 0, 0), ("Depth unit", 1, 0), ("C unit", 2, 0))
         for caption, column, row in captions:
-            self._lbl(units, caption, bg="card", fg="muted", size=9).grid(row=row, column=column, sticky="w", padx=(8 if column else 0, 0), pady=(8 if row else 0, 3))
+            self._lbl(units, caption, bg="card", fg="muted", size=9).grid(row=row, column=column, sticky="w", padx=(8 if column else 0, 0), pady=(0, 3))
         ttk.Entry(units, textvariable=self.x_scale_var).grid(row=1, column=0, sticky="ew")
         ttk.Entry(units, textvariable=self.x_unit_var).grid(row=1, column=1, sticky="ew", padx=(8, 0))
         ttk.Entry(units, textvariable=self.c_unit_var).grid(row=1, column=2, sticky="ew", padx=(8, 0))
-        self._lbl(units, "Time is entered in hours and converted to seconds for D.", bg="card", fg="muted", size=8).grid(row=2, column=0, columnspan=3, sticky="w", pady=(8, 0))
-        presets = self._frame(self.sidebar, "card")
+        presets = self._frame(self.advanced_frame, "card")
         presets.pack(fill="x", padx=16, pady=(8, 4))
-        self._lbl(presets, "Depth presets", bg="card", fg="muted", size=9).pack(anchor="w", pady=(0, 4))
         preset_row = self._frame(presets, "card")
         preset_row.pack(fill="x")
         for label, scale, unit in (("As entered", "1", None), ("mm → m", "0.001", "m"), ("µm → m", "1e-6", "m")):
             self._button(preset_row, label, lambda s=scale, u=unit: self._apply_depth_preset(s, u), kind="tool").pack(side="left", padx=(0, 6))
         self.residual_toggle = tk.Checkbutton(
-            self.sidebar,
+            self.advanced_frame,
             text="Show residual panel",
             variable=self.show_residuals,
             command=self._on_residual_toggle,
@@ -1065,13 +1085,79 @@ class DiffusionApp:
         self.progress.pack_forget()
         self.footer_note = self._lbl(
             footer,
-            "Enter fits the active profile.",
+            "Enter fits. View opens extra tools.",
             bg="card",
             fg="muted",
             size=8,
             wraplength=300,
         )
         self.footer_note.pack(fill="x", padx=14, pady=(0, 10))
+
+    def _toggle_named_pane(self, name: str) -> None:
+        mapping = {
+            "setup": self.show_setup,
+            "project": self.show_project,
+            "workbook": self.show_workbook,
+            "metrics": self.show_metrics,
+            "advanced": self.show_advanced,
+        }
+        variable = mapping[name]
+        variable.set(not variable.get())
+        if name == "advanced" and variable.get():
+            self.show_setup.set(True)
+        self._sync_panes()
+
+    def _sync_panes(self) -> None:
+        if not hasattr(self, "main_pane"):
+            return
+        for child in list(self.main_pane.panes()):
+            try:
+                self.main_pane.forget(child)
+            except tk.TclError:
+                pass
+        if self.show_project.get():
+            self.main_pane.add(self.explorer_outer, minsize=160, width=200)
+        if self.show_setup.get():
+            self.main_pane.add(self.sidebar_outer, minsize=260, width=300)
+        self.main_pane.add(self.content, minsize=520)
+        if self.show_metrics.get():
+            self.metric_cards_container.grid()
+        else:
+            self.metric_cards_container.grid_remove()
+        if self.show_workbook.get():
+            self.workspace.grid()
+            self.content.grid_rowconfigure(1, weight=3)
+            self.content.grid_rowconfigure(3, weight=1)
+        else:
+            self.workspace.grid_remove()
+            self.content.grid_rowconfigure(1, weight=1)
+            self.content.grid_rowconfigure(3, weight=0)
+        if self.show_advanced.get():
+            self.advanced_frame.pack(fill="x")
+        else:
+            self.advanced_frame.pack_forget()
+        self._style_pane_buttons()
+        self.root.after_idle(self._sync_figure_size)
+
+    def _style_pane_buttons(self) -> None:
+        labels = {
+            "setup": "Setup",
+            "project": "Project",
+            "workbook": "Table",
+            "metrics": "Results",
+        }
+        states = {
+            "setup": self.show_setup.get(),
+            "project": self.show_project.get(),
+            "workbook": self.show_workbook.get(),
+            "metrics": self.show_metrics.get(),
+        }
+        for key, button in getattr(self, "pane_buttons", {}).items():
+            mark = "● " if states.get(key) else ""
+            try:
+                button.configure(text=f"{mark}{labels[key]}")
+            except tk.TclError:
+                pass
 
     def _build_results_area(self) -> None:
         self.metric_cards_container = self._frame(self.content, "canvas")
@@ -1162,16 +1248,9 @@ class DiffusionApp:
         workspace.grid(row=3, column=0, sticky="nsew", pady=(8, 0))
         workspace.grid_columnconfigure(0, weight=1)
         workspace.grid_rowconfigure(1, weight=1)
-        self.content.grid_rowconfigure(1, weight=3)
-        self.content.grid_rowconfigure(3, weight=1)
-        graph_bar = self._frame(workspace, "canvas")
-        graph_bar.grid(row=0, column=0, sticky="ew", pady=(0, 4))
-        self.profile_graph_button = self._button(graph_bar, "Graph 1  ·  Profile", lambda: self._set_graph_mode("profile"), kind="tool")
-        self.profile_graph_button.pack(side="left")
-        self.arrhenius_graph_button = self._button(graph_bar, "Graph 2  ·  ln(D) vs 1/kT", lambda: self._set_graph_mode("arrhenius"), kind="tool")
-        self.arrhenius_graph_button.pack(side="left", padx=(6, 0))
-        self._button(graph_bar, "Fit 1/kT line", self._fit_arrhenius, kind="accent").pack(side="right")
-
+        self.content.grid_rowconfigure(1, weight=1)
+        self.content.grid_rowconfigure(3, weight=0)
+        self.workspace = workspace
         book = self._frame(workspace, "card", highlightthickness=1, highlightbackground=self.p["line"])
         self._remember(book, highlightbackground="line")
         book.grid(row=1, column=0, sticky="nsew")
@@ -2631,6 +2710,8 @@ class DiffusionApp:
         self.current_fit_data = None
         self._clear_metrics()
         self._save_active_profile()
+        self.show_workbook.set(True)
+        self._sync_panes()
         self._refresh_workbook()
         self._refresh_summary()
         self._set_graph_mode("profile")

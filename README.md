@@ -1,6 +1,6 @@
 # FickLab
 
-FickLab is an Origin-style Windows workbench for Fick’s second law (semi-infinite solid, fixed surface concentration) and Arrhenius plots of diffusivity.
+FickLab is a Windows workbench for Fick’s second law (semi-infinite solid, fixed surface concentration) and Arrhenius plots of diffusivity. The graph is the main view; Setup, Project, Table, and Results open from **View** or the Tools toolbar.
 
 ```
 C(x, t) = C₀ + (Cₛ − C₀) · erfc( x / (2 √(Dt)) )
