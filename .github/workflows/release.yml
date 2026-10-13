@@ -25,8 +25,18 @@ jobs:
         run: python -m PyInstaller --noconfirm --clean FickLab.spec
 
       - name: Verify python312.dll and VC runtime are in the exe
+        shell: pwsh
         run: |
-          python -c "from PyInstaller.archive.readers import CArchiveReader; archive = CArchiveReader('dist/FickLab.exe'); toc = archive.toc; names = {name.lower() for name in toc} if hasattr(toc, 'items') else {str(entry[0]).lower() for entry in toc}; missing = sorted({'python312.dll', 'vcruntime140.dll'} - names); raise SystemExit('exe is missing: ' + ', '.join(missing)) if missing else print('ok', sorted(n for n in names if n.endswith('.dll') and ('python' in n or 'vcruntime' in n)))"
+          @'
+          from PyInstaller.archive.readers import CArchiveReader
+          archive = CArchiveReader("dist/FickLab.exe")
+          toc = archive.toc
+          names = {name.lower() for name in toc} if hasattr(toc, "items") else {str(entry[0]).lower() for entry in toc}
+          missing = sorted({"python312.dll", "vcruntime140.dll"} - names)
+          print("ok", sorted(n for n in names if n.endswith(".dll") and ("python" in n or "vcruntime" in n)))
+          if missing:
+              raise SystemExit("exe is missing: " + ", ".join(missing))
+          '@ | python -
 
       - name: Attach the exe to the GitHub release
         env:
