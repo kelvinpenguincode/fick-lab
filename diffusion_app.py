@@ -897,11 +897,14 @@ class DiffusionApp:
 
         sidebar_outer = self._frame(self.main_pane, "card", highlightthickness=1, highlightbackground=self.p["line"])
         self.sidebar_outer = self._remember(sidebar_outer, bg="card", highlightbackground="line")
+        sidebar_outer.grid_rowconfigure(0, weight=1)
+        sidebar_outer.grid_columnconfigure(0, weight=1)
         self.sidebar_scroll_area = self._frame(sidebar_outer, "card")
         self.sidebar = self._make_scrollable_frame(self.sidebar_scroll_area)
         self._build_sidebar()
         self._build_sidebar_footer(sidebar_outer)
-        self.sidebar_scroll_area.pack(side="top", fill="both", expand=True)
+        self.sidebar_scroll_area.grid(row=0, column=0, sticky="nsew")
+        self.sidebar_footer.grid(row=1, column=0, sticky="ew")
 
         self.content = self._frame(self.main_pane, "canvas")
         self.content.grid_columnconfigure(0, weight=1)
@@ -919,12 +922,13 @@ class DiffusionApp:
         self._lbl(status_bar, bg="card", fg="muted", size=9, textvariable=self.status_var).pack(side="left", padx=14, fill="y")
 
     def _make_scrollable_frame(self, parent: tk.Widget) -> tk.Frame:
+        parent.grid_rowconfigure(0, weight=1)
+        parent.grid_columnconfigure(0, weight=1)
         canvas = tk.Canvas(parent, bg=self.p["card"], highlightthickness=0, bd=0, height=120, highlightbackground=self.p["card"])
         self.sidebar_canvas = self._remember(canvas, bg="card")
         self.sidebar_scrollbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
-        canvas.configure(yscrollcommand=self._on_sidebar_scroll)
-        self.sidebar_scrollbar.pack(side="right", fill="y")
-        canvas.pack(side="left", fill="both", expand=True)
+        canvas.configure(yscrollcommand=self.sidebar_scrollbar.set)
+        canvas.grid(row=0, column=0, sticky="nsew")
         inner = self._frame(canvas, "card")
         self._sidebar_window_id = canvas.create_window((0, 0), window=inner, anchor="nw")
 
@@ -943,37 +947,32 @@ class DiffusionApp:
         canvas.bind("<Configure>", resize_inner)
         return inner
 
-    def _on_sidebar_scroll(self, *values) -> None:
-        self.sidebar_scrollbar.set(*values)
-        self._update_sidebar_scrollbar()
+    def _sidebar_allows_scroll(self) -> bool:
+        return bool(getattr(self, "show_advanced", None) and self.show_advanced.get())
 
     def _refresh_sidebar_scroll(self) -> None:
         canvas = getattr(self, "sidebar_canvas", None)
         inner = getattr(self, "sidebar", None)
-        if canvas is None or inner is None:
+        bar = getattr(self, "sidebar_scrollbar", None)
+        if canvas is None or inner is None or bar is None:
             return
         try:
             inner.update_idletasks()
-            height = max(inner.winfo_reqheight(), 1)
             width = max(canvas.winfo_width(), inner.winfo_reqwidth(), 1)
-            canvas.configure(scrollregion=(0, 0, width, height))
-            if height <= max(canvas.winfo_height(), 1):
+            content_height = max(inner.winfo_reqheight(), 1)
+            view_height = max(canvas.winfo_height(), 1)
+            allow = self._sidebar_allows_scroll()
+            if not allow:
                 canvas.yview_moveto(0)
-            self._update_sidebar_scrollbar()
-        except tk.TclError:
-            pass
-
-    def _update_sidebar_scrollbar(self) -> None:
-        canvas = getattr(self, "sidebar_canvas", None)
-        bar = getattr(self, "sidebar_scrollbar", None)
-        if canvas is None or bar is None:
-            return
-        try:
-            first, last = canvas.yview()
-            if last - first >= 0.999:
-                bar.pack_forget()
-            elif not bar.winfo_ismapped():
-                bar.pack(side="right", fill="y")
+                canvas.configure(scrollregion=(0, 0, width, view_height))
+                bar.grid_remove()
+                return
+            canvas.configure(scrollregion=(0, 0, width, content_height))
+            if content_height > view_height + 2:
+                bar.grid(row=0, column=1, sticky="ns")
+            else:
+                canvas.yview_moveto(0)
+                bar.grid_remove()
         except tk.TclError:
             pass
 
@@ -1019,8 +1018,10 @@ class DiffusionApp:
             first, last = canvas.yview()
         except tk.TclError:
             return "break"
+        if not self._sidebar_allows_scroll():
+            return None
         if last - first >= 0.999:
-            return "break"
+            return None
         canvas.yview_scroll(units, "units")
         return "break"
 
@@ -1059,7 +1060,7 @@ class DiffusionApp:
         self._button(file_row, "Browse", self._browse_csv, kind="tool").pack(side="left", padx=(8, 0))
         self._button(self.sidebar, "Advanced options", lambda: self._toggle_named_pane("advanced"), kind="tool").pack(fill="x", padx=16, pady=(12, 8))
 
-        self.advanced_frame = self._frame(self.root, "card")
+        self.advanced_frame = self._frame(self.sidebar, "card")
         self.scenario_hint_label = self._lbl(self.advanced_frame, bg="card", fg="muted", size=9, textvariable=self.hint_var, wraplength=260)
         self.scenario_hint_label.pack(fill="x", padx=16, pady=(0, 8))
         columns = self._frame(self.advanced_frame, "card")
@@ -1117,8 +1118,7 @@ class DiffusionApp:
 
     def _build_sidebar_footer(self, parent: tk.Widget) -> None:
         footer = self._frame(parent, "card", highlightthickness=1, highlightbackground=self.p["line"])
-        self._remember(footer, highlightbackground="line")
-        footer.pack(side="bottom", fill="x")
+        self.sidebar_footer = self._remember(footer, highlightbackground="line")
         self.fit_button = self._button(footer, "Fit diffusion profile", self._start_fit, kind="accent")
         self.fit_button.pack(fill="x", padx=14, pady=(12, 8))
         self.progress = ttk.Progressbar(footer, mode="indeterminate")
@@ -1173,10 +1173,18 @@ class DiffusionApp:
             self.content.grid_rowconfigure(1, weight=1)
             self.content.grid_rowconfigure(3, weight=0)
         if self.show_advanced.get():
-            self.advanced_frame.pack(in_=self.sidebar, fill="x")
+            self.advanced_frame.pack(fill="x")
         else:
             self.advanced_frame.pack_forget()
+            try:
+                self.sidebar_canvas.yview_moveto(0)
+            except (tk.TclError, AttributeError):
+                pass
         self._style_pane_buttons()
+        try:
+            self.sidebar_footer.lift()
+        except (tk.TclError, AttributeError):
+            pass
         self.root.after_idle(self._refresh_sidebar_scroll)
         self.root.after_idle(self._sync_figure_size)
 

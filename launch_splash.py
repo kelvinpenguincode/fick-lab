@@ -1,7 +1,8 @@
 """Open a window immediately, then load the science libraries behind the animation.
 
-The packaged app also shows splash.png while Windows unpacks the exe. This
-window takes over as soon as Python is running, so the wait has a clock.
+The packaged exe unpacks first, then this window shows a clock while the
+fitting libraries load. The PyInstaller bootloader splash is not used; that
+path failed to load python312.dll on some Windows installs.
 A downloaded copy hands off to the Start-menu install so an update is the
 copy that actually opens.
 """
