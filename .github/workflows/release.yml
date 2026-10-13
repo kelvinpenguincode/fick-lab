@@ -32,8 +32,14 @@ jobs:
           if (-not (Test-Path -LiteralPath dist/FickLab.exe)) {
             throw "dist/FickLab.exe was not built."
           }
-          gh release create $env:GITHUB_REF_NAME dist/FickLab.exe --title $env:GITHUB_REF_NAME --generate-notes --verify-tag
-          $asset = gh release view $env:GITHUB_REF_NAME --json assets --jq '.assets[] | select(.name == "FickLab.exe") | .name'
+          $tag = $env:GITHUB_REF_NAME
+          gh release view $tag --json tagName 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag dist/FickLab.exe --clobber
+          } else {
+            gh release create $tag dist/FickLab.exe --title $tag --generate-notes --verify-tag
+          }
+          $asset = gh release view $tag --json assets --jq '.assets[] | select(.name == "FickLab.exe") | .name'
           if ($asset -ne "FickLab.exe") {
             throw "FickLab.exe is missing from the release."
           }
