@@ -14,7 +14,7 @@ Open the installed app from the Start menu or the desktop shortcut. That copy is
 
 2. **Enter time in hours.** The fit converts hours to seconds automatically (`1 h = 3600 s`). Diffusivity is reported in (depth unit)² / s.
 
-3. **Fit D.** Set C₀, depth scale, and a scenario, then Fit D or press Enter. Graph 1 is the measured profile, the fitted erfc curve, and residuals.
+3. **Fit D.** Set C₀, depth scale, and a scenario, then Fit D or press Enter. Graph 1 is the measured profile, the fitted erfc curve, and residuals. Hover a point for values; click it to copy.
 
 4. **Linearize ln(D) vs 1/kT.** Set temperature in kelvin (or °C) on each fitted sheet. Open Graph 2 and Fit 1/kT line.
 

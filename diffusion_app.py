@@ -487,8 +487,9 @@ class DiffusionApp:
 
     def _tutorial_text(self) -> str:
         return (
-            "FickLab 1.6.0 tutorial\n"
-            "The graph is the main window. Open extra tools from View or the toolbar when you need them.\n\n"
+            "FickLab 1.6.2 tutorial\n"
+            "The graph is the main window. Open extra tools from View or the toolbar when you need them.\n"
+            "Hover a measured point for depth, concentration, model, and residual. Click the point to copy those values.\n\n"
             "1. Import\n"
             "   File → Import, or Import on the toolbar, or Ctrl+O. Each CSV is a sheet.\n"
             "   Open Table to paste (Ctrl+V) or edit cells, then Apply table to plot.\n\n"
@@ -920,18 +921,15 @@ class DiffusionApp:
     def _make_scrollable_frame(self, parent: tk.Widget) -> tk.Frame:
         canvas = tk.Canvas(parent, bg=self.p["card"], highlightthickness=0, bd=0, height=120, highlightbackground=self.p["card"])
         self.sidebar_canvas = self._remember(canvas, bg="card")
-        scrollbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
-        canvas.configure(yscrollcommand=scrollbar.set)
-        scrollbar.pack(side="right", fill="y")
+        self.sidebar_scrollbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=self._on_sidebar_scroll)
+        self.sidebar_scrollbar.pack(side="right", fill="y")
         canvas.pack(side="left", fill="both", expand=True)
         inner = self._frame(canvas, "card")
-        window_id = canvas.create_window((0, 0), window=inner, anchor="nw")
-
-        def update_scroll_region(_event=None):
-            canvas.configure(scrollregion=canvas.bbox("all"))
+        self._sidebar_window_id = canvas.create_window((0, 0), window=inner, anchor="nw")
 
         def resize_inner(event):
-            canvas.itemconfigure(window_id, width=event.width)
+            canvas.itemconfigure(self._sidebar_window_id, width=event.width)
             wrap = max(220, event.width - 36)
             if hasattr(self, "scenario_hint_label"):
                 self.scenario_hint_label.configure(wraplength=wrap)
@@ -939,10 +937,45 @@ class DiffusionApp:
                 self.summary_label.configure(wraplength=wrap)
             if hasattr(self, "footer_note"):
                 self.footer_note.configure(wraplength=max(220, event.width - 8))
+            self._refresh_sidebar_scroll()
 
-        inner.bind("<Configure>", update_scroll_region)
+        inner.bind("<Configure>", lambda _event: self._refresh_sidebar_scroll())
         canvas.bind("<Configure>", resize_inner)
         return inner
+
+    def _on_sidebar_scroll(self, *values) -> None:
+        self.sidebar_scrollbar.set(*values)
+        self._update_sidebar_scrollbar()
+
+    def _refresh_sidebar_scroll(self) -> None:
+        canvas = getattr(self, "sidebar_canvas", None)
+        inner = getattr(self, "sidebar", None)
+        if canvas is None or inner is None:
+            return
+        try:
+            inner.update_idletasks()
+            height = max(inner.winfo_reqheight(), 1)
+            width = max(canvas.winfo_width(), inner.winfo_reqwidth(), 1)
+            canvas.configure(scrollregion=(0, 0, width, height))
+            if height <= max(canvas.winfo_height(), 1):
+                canvas.yview_moveto(0)
+            self._update_sidebar_scrollbar()
+        except tk.TclError:
+            pass
+
+    def _update_sidebar_scrollbar(self) -> None:
+        canvas = getattr(self, "sidebar_canvas", None)
+        bar = getattr(self, "sidebar_scrollbar", None)
+        if canvas is None or bar is None:
+            return
+        try:
+            first, last = canvas.yview()
+            if last - first >= 0.999:
+                bar.pack_forget()
+            elif not bar.winfo_ismapped():
+                bar.pack(side="right", fill="y")
+        except tk.TclError:
+            pass
 
     def _widget_under_pointer(self):
         try:
@@ -981,7 +1014,14 @@ class DiffusionApp:
             units = -int(round(notches * 4))
             if units == 0:
                 units = -4 if delta > 0 else 4
-        self.sidebar_canvas.yview_scroll(units, "units")
+        canvas = self.sidebar_canvas
+        try:
+            first, last = canvas.yview()
+        except tk.TclError:
+            return "break"
+        if last - first >= 0.999:
+            return "break"
+        canvas.yview_scroll(units, "units")
         return "break"
 
     def _section(self, text: str) -> None:
@@ -1012,16 +1052,16 @@ class DiffusionApp:
         self._lbl(temp_row, "T (°C)", bg="card", fg="muted", size=9).grid(row=0, column=1, sticky="w", padx=(8, 0), pady=(0, 3))
         ttk.Entry(temp_row, textvariable=self.temperature_k_var).grid(row=1, column=0, sticky="ew")
         ttk.Entry(temp_row, textvariable=self.temperature_c_var).grid(row=1, column=1, sticky="ew", padx=(8, 0))
-        self._button(self.sidebar, "Advanced options", lambda: self._toggle_named_pane("advanced"), kind="tool").pack(fill="x", padx=16, pady=(12, 8))
-
-        self.advanced_frame = self._frame(self.sidebar, "card")
-        self.scenario_hint_label = self._lbl(self.advanced_frame, bg="card", fg="muted", size=9, textvariable=self.hint_var, wraplength=260)
-        self.scenario_hint_label.pack(fill="x", padx=16, pady=(0, 8))
-        self._lbl(self.advanced_frame, "DATA", bg="card", fg="muted", size=8, bold=True).pack(fill="x", padx=16, pady=(4, 6))
-        file_row = self._frame(self.advanced_frame, "card")
+        self._lbl(self.sidebar, "DATA", bg="card", fg="muted", size=8, bold=True).pack(fill="x", padx=16, pady=(12, 6))
+        file_row = self._frame(self.sidebar, "card")
         file_row.pack(fill="x", padx=16)
         ttk.Entry(file_row, textvariable=self.file_var).pack(side="left", fill="x", expand=True)
         self._button(file_row, "Browse", self._browse_csv, kind="tool").pack(side="left", padx=(8, 0))
+        self._button(self.sidebar, "Advanced options", lambda: self._toggle_named_pane("advanced"), kind="tool").pack(fill="x", padx=16, pady=(12, 8))
+
+        self.advanced_frame = self._frame(self.root, "card")
+        self.scenario_hint_label = self._lbl(self.advanced_frame, bg="card", fg="muted", size=9, textvariable=self.hint_var, wraplength=260)
+        self.scenario_hint_label.pack(fill="x", padx=16, pady=(0, 8))
         columns = self._frame(self.advanced_frame, "card")
         columns.pack(fill="x", padx=16, pady=(8, 0))
         columns.grid_columnconfigure(0, weight=1)
@@ -1085,7 +1125,7 @@ class DiffusionApp:
         self.progress.pack_forget()
         self.footer_note = self._lbl(
             footer,
-            "Enter fits. View opens extra tools.",
+            "Hover a point for values. Click to copy. View opens extra tools.",
             bg="card",
             fg="muted",
             size=8,
@@ -1133,10 +1173,11 @@ class DiffusionApp:
             self.content.grid_rowconfigure(1, weight=1)
             self.content.grid_rowconfigure(3, weight=0)
         if self.show_advanced.get():
-            self.advanced_frame.pack(fill="x")
+            self.advanced_frame.pack(in_=self.sidebar, fill="x")
         else:
             self.advanced_frame.pack_forget()
         self._style_pane_buttons()
+        self.root.after_idle(self._refresh_sidebar_scroll)
         self.root.after_idle(self._sync_figure_size)
 
     def _style_pane_buttons(self) -> None:
@@ -2076,8 +2117,7 @@ class DiffusionApp:
             return
         self._draw_generation += 1
         generation = self._draw_generation
-        if self.canvas is not None and hasattr(self, "_motion_cid"):
-            self.canvas.mpl_disconnect(self._motion_cid)
+        self._disconnect_plot_events()
         self._clear_chart_widgets()
         self.figure = None
         self.canvas = None
@@ -2175,20 +2215,22 @@ class DiffusionApp:
                 child.configure(background=p["card"])
         except tk.TclError:
             pass
-        if predicted is not None:
-            self.hover_annotation = ax.annotate(
-                "",
-                xy=(0, 0),
-                xytext=(12, 12),
-                textcoords="offset points",
-                bbox={"boxstyle": "round,pad=0.35", "fc": p["header"], "ec": "none", "alpha": 0.94},
-                color="#faf7f2",
-                fontsize=8,
-                visible=False,
-                zorder=10,
-            )
-            self._plot_hover_data = (ax, x, measured, predicted)
-            self._motion_cid = self.canvas.mpl_connect("motion_notify_event", self._on_plot_motion)
+        depth_name = depth_unit
+        c_name = concentration_unit or "C"
+        predicted_values = predicted
+
+        def format_profile_point(index: int) -> str:
+            lines = [
+                f"Depth  {x[index]:.5g} {depth_name}",
+                f"Measured  {measured[index]:.5g} {c_name}".rstrip(),
+            ]
+            if predicted_values is not None:
+                residual = measured[index] - predicted_values[index]
+                lines.append(f"Model  {predicted_values[index]:.5g} {c_name}".rstrip())
+                lines.append(f"Residual  {residual:+.4g}")
+            return "\n".join(lines)
+
+        self._attach_plot_hover(ax, x, measured, format_profile_point)
         self.root.after_idle(self._sync_figure_size)
         self._raise_loading()
 
@@ -2227,34 +2269,85 @@ class DiffusionApp:
             zorder=6,
         )
 
-    def _on_plot_motion(self, event) -> None:
-        if not hasattr(self, "hover_annotation") or self.canvas is None or self.current_fit_data is None:
+    def _disconnect_plot_events(self) -> None:
+        if self.canvas is None:
             return
-        ax, x, measured, predicted = self._plot_hover_data
-        if event.inaxes is not ax or event.xdata is None or event.ydata is None:
-            if self.hover_annotation.get_visible():
-                self.hover_annotation.set_visible(False)
-                self.canvas.draw_idle()
-            return
-        pixels = ax.transData.transform(np.column_stack((x, measured)))
+        for attr in ("_motion_cid", "_click_cid"):
+            cid = getattr(self, attr, None)
+            if cid is None:
+                continue
+            try:
+                self.canvas.mpl_disconnect(cid)
+            except Exception:
+                pass
+            setattr(self, attr, None)
+
+    def _attach_plot_hover(self, ax, x, y, formatter) -> None:
+        self.hover_annotation = ax.annotate(
+            "",
+            xy=(0, 0),
+            xytext=(12, 12),
+            textcoords="offset points",
+            bbox={"boxstyle": "round,pad=0.4", "fc": "#1c1c1c", "ec": "#6b6b6b", "linewidth": 0.6, "alpha": 0.96},
+            color="#f4f0ea",
+            fontsize=8,
+            visible=False,
+            zorder=10,
+        )
+        self._plot_hover_data = (ax, np.asarray(x, dtype=float), np.asarray(y, dtype=float), formatter)
+        self._motion_cid = self.canvas.mpl_connect("motion_notify_event", self._on_plot_motion)
+        self._click_cid = self.canvas.mpl_connect("button_press_event", self._on_plot_click)
+        try:
+            self.canvas.get_tk_widget().configure(cursor="crosshair")
+        except tk.TclError:
+            pass
+
+    def _hover_index(self, event):
+        if not hasattr(self, "hover_annotation") or self.canvas is None or not hasattr(self, "_plot_hover_data"):
+            return None
+        ax, x, y, _formatter = self._plot_hover_data
+        if event.inaxes is not ax or event.xdata is None or event.ydata is None or x.size == 0:
+            return None
+        pixels = ax.transData.transform(np.column_stack((x, y)))
         distance = np.hypot(pixels[:, 0] - event.x, pixels[:, 1] - event.y)
         nearest = int(np.argmin(distance))
-        if distance[nearest] > 16:
+        if distance[nearest] > 22:
+            return None
+        return nearest
+
+    def _on_plot_motion(self, event) -> None:
+        if not hasattr(self, "hover_annotation") or self.canvas is None or not hasattr(self, "_plot_hover_data"):
+            return
+        ax, x, y, formatter = self._plot_hover_data
+        nearest = self._hover_index(event)
+        if nearest is None:
+            if event.inaxes is ax and event.xdata is not None and event.ydata is not None:
+                self.status_var.set(f"x = {event.xdata:.5g}    y = {event.ydata:.5g}")
             if self.hover_annotation.get_visible():
                 self.hover_annotation.set_visible(False)
                 self.canvas.draw_idle()
             return
-        residual = measured[nearest] - predicted[nearest]
-        fit = self.current_fit_data
-        self.hover_annotation.xy = (x[nearest], measured[nearest])
-        self.hover_annotation.set_text(
-            f"Depth  {x[nearest]:.5g} {fit['x_unit']}\n"
-            f"Measured  {measured[nearest]:.5g}\n"
-            f"Model  {predicted[nearest]:.5g}\n"
-            f"Residual  {residual:+.4g}"
-        )
+        text = formatter(nearest)
+        self.hover_annotation.xy = (x[nearest], y[nearest])
+        self.hover_annotation.set_text(text)
         self.hover_annotation.set_visible(True)
+        self.status_var.set(text.replace("\n", "   ·   "))
         self.canvas.draw_idle()
+
+    def _on_plot_click(self, event) -> None:
+        if event.button != 1:
+            return
+        nearest = self._hover_index(event)
+        if nearest is None or not hasattr(self, "_plot_hover_data"):
+            return
+        _ax, _x, _y, formatter = self._plot_hover_data
+        text = formatter(nearest)
+        try:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(text)
+            self.status_var.set("Copied point values")
+        except tk.TclError:
+            pass
 
     def _summary_text(self) -> str:
         if self.current_result is None or self.current_fit_data is None:
@@ -2571,6 +2664,19 @@ class DiffusionApp:
         self.toolbar.update()
         self.toolbar.pack(side="bottom", fill="x")
         widget.pack(side="top", fill="both", expand=True)
+        if points:
+            arr_x = np.array([point["x"] for point in points], dtype=float)
+            arr_y = np.array([point["y"] for point in points], dtype=float)
+
+            def format_arrhenius_point(index: int) -> str:
+                point = points[index]
+                return (
+                    f"{point['label']}\n"
+                    f"1/kT  {point['x']:.5g} eV⁻¹\n"
+                    f"ln(D)  {point['y']:.5g} ± {point['y_err']:.3g}"
+                )
+
+            self._attach_plot_hover(ax, arr_x, arr_y, format_arrhenius_point)
         self._set_export_enabled(True)
         self.root.after_idle(self._sync_figure_size)
 
