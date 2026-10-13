@@ -8,5 +8,5 @@ GITHUB_REPOSITORY is "owner/name". github_repo.txt can override it, both
 beside the source and beside the downloaded exe.
 """
 
-APP_VERSION = "1.4.1"
+APP_VERSION = "1.5.0"
 GITHUB_REPOSITORY = ""

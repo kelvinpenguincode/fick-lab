@@ -13,13 +13,11 @@ The first executable build needs an internet connection to install dependencies 
 
 ## Use the interface
 
-1. The app opens on an empty profile. Click **Browse** or **Add CSV** and select one or more depth/concentration files. Each file opens on its own tab, with its own column selection and fit result. You can switch between tabs or close a page; shared physical inputs (time, C₀ and units) remain editable.
-2. Select the depth and concentration columns. Header names are offered when the file has a header; index-based files use zero-based indices.
-3. Enter the known time and bulk concentration. Scenario 1 also requires the known surface concentration. Scenario 3 offers a configurable C_s grid size.
-4. Set the depth scale and the depth, time, and concentration units. The reported D unit is depth²/time.
-5. Click **Fit diffusion profile** or press **Enter**. The chart shows every input measurement, the fitted curve, and a residual diagnostic. Hover over a point for its measured/model/residual values.
-6. Use the chart toolbar to pan/zoom, hover a point for exact values, switch between light and dark appearance, **Save plot image** for a high-resolution PNG/SVG/PDF, **Export results CSV** for the fit report and point-by-point predictions/residuals, or **Copy results** to copy the summary. Saved chart images include the scenario, units, D, C_s, R², RMSE, and residual plot.
-7. **Check for updates** (header or Help menu) compares this build with the latest GitHub release. When a newer `FickLab.exe` is attached, the app downloads it, replaces the running file, and restarts.
+1. The window is laid out like Origin: Project explorer, setup, Graph 1 / Graph 2, and a workbook table. Import one or more CSV sheets, or paste a table with Ctrl+V.
+2. Enter diffusion time in **hours**. The app converts to seconds for the Fick fit so D is in (depth unit)²/s.
+3. Set C₀, depth scale, and temperature (K or °C). Fit D on Graph 1. Fit at least two sheets, then open Graph 2 and linearize ln(D) vs 1/kT (`k = 8.617333262e-5 eV/K`). σ_ln(D) = σ_D / D; that residual error sets the slope and intercept uncertainties.
+4. **Export graph** asks for width, height, and DPI so the figure matches a presentation.
+5. Press **F1** for the in-app tutorial. **Check for updates** replaces the Start menu copy when a newer GitHub release exists.
 
 The input panel can be vertically scrolled on shorter displays. The Run Fit button stays pinned at the bottom of the panel. The window opens at about 90% of the detected screen, can be resized, and has a draggable divider between setup and analysis. Fit cards reflow automatically as the analysis area narrows. Use fullscreen with F11 if desired.
 

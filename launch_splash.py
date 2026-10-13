@@ -31,6 +31,7 @@ def _load_libraries() -> None:
     import scenario1  # noqa: F401
     import scenario2  # noqa: F401
     import scenario3  # noqa: F401
+    import arrhenius  # noqa: F401
 
 
 def _close_bootloader_splash() -> None:

@@ -24,6 +24,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolb
 from matplotlib.figure import Figure
 
 import app_version
+import arrhenius
 import scenario1
 import scenario2
 import scenario3
@@ -95,28 +96,41 @@ class DiffusionApp:
         self.file_var = tk.StringVar(value="")
         self.x_col_var = tk.StringVar(value="0")
         self.c_col_var = tk.StringVar(value="1")
-        self.time_var = tk.StringVar(value="36000")
+        self.time_var = tk.StringVar(value="10")
         self.c0_var = tk.StringVar(value="100")
         self.cs_var = tk.StringVar(value="100")
         self.x_scale_var = tk.StringVar(value="1")
         self.x_unit_var = tk.StringVar(value="m")
-        self.t_unit_var = tk.StringVar(value="s")
+        self.t_unit_var = tk.StringVar(value="h")
         self.c_unit_var = tk.StringVar(value="%")
         self.grid_steps_var = tk.StringVar(value="401")
-        self.status_var = tk.StringVar(value="Load a depth–concentration CSV to plot the profile and fit Cₛ and D.")
+        self.temperature_k_var = tk.StringVar(value="")
+        self.temperature_c_var = tk.StringVar(value="")
+        self.time_seconds_var = tk.StringVar(value="= 36000 s")
+        self.graph_mode = tk.StringVar(value="profile")
+        self.export_width_in = tk.StringVar(value="10")
+        self.export_height_in = tk.StringVar(value="6.5")
+        self.export_dpi = tk.StringVar(value="300")
+        self.status_var = tk.StringVar(value="Import a workbook sheet, set time in hours, then fit D.")
         self.hint_var = tk.StringVar(value="")
-        self.summary_var = tk.StringVar(value="No profile loaded yet.")
-        self.header_workspace_var = tk.StringVar(value="No profiles")
-        self.chart_title_var = tk.StringVar(value="Concentration profile")
+        self.summary_var = tk.StringVar(value="No workbook sheet loaded yet.")
+        self.header_workspace_var = tk.StringVar(value="No sheets")
+        self.chart_title_var = tk.StringVar(value="Graph 1  ·  concentration profile")
         self.chart_subtitle_var = tk.StringVar(value="Measured points appear here, then the fitted erfc curve.")
         self.formula_var = tk.StringVar(value="C(x, t) = C₀ + (Cₛ − C₀) · erfc( x / 2√(Dt) )")
         self.show_residuals = tk.BooleanVar(value=True)
+        self.arrhenius_fit = None
+        self._syncing_temperature = False
+        self._refreshing_tree = False
+        self.time_var.trace_add("write", lambda *_args: self._sync_time_seconds())
+        self.temperature_k_var.trace_add("write", lambda *_args: self._on_temperature_k())
+        self.temperature_c_var.trace_add("write", lambda *_args: self._on_temperature_c())
 
         self._configure_styles()
         self._build_menu()
         self._build_ui()
         self._apply_theme()
-        self._create_profile("Profile 1")
+        self._create_profile("Sheet 1")
         self._update_scenario_controls()
         self.root.bind("<Configure>", self._schedule_responsive_layout, add="+")
         self.root.bind_all("<Return>", self._handle_enter_key)
@@ -132,62 +146,66 @@ class DiffusionApp:
     def _palette(self) -> dict[str, str]:
         if self.dark_mode:
             return {
-                "canvas": "#0b1120",
-                "card": "#111827",
-                "ink": "#f8fafc",
-                "muted": "#94a3b8",
-                "line": "#1e293b",
-                "accent": "#2dd4bf",
-                "accent_active": "#14b8a6",
-                "on_accent": "#042f2e",
-                "quiet": "#1e293b",
-                "quiet_active": "#334155",
-                "field": "#0f172a",
+                "canvas": "#202020",
+                "card": "#2c2c2c",
+                "ink": "#ffffff",
+                "muted": "#c5c5c5",
+                "line": "#3b3b3b",
+                "accent": "#60cdff",
+                "accent_active": "#4cc2ff",
+                "on_accent": "#003543",
+                "quiet": "#323232",
+                "quiet_active": "#3d3d3d",
+                "field": "#1e1e1e",
                 "white": "#ffffff",
-                "header": "#020617",
-                "header_muted": "#94a3b8",
-                "chip": "#1e293b",
-                "chip_fg": "#e2e8f0",
-                "point": "#93c5fd",
-                "curve": "#2dd4bf",
-                "residual": "#fb923c",
-                "formula_bg": "#042f2e",
-                "formula_fg": "#99f6e4",
-                "grid": "#1e293b",
-                "zero": "#cbd5e1",
-                "tone_d": "#2dd4bf",
-                "tone_cs": "#fbbf24",
-                "tone_r2": "#93c5fd",
-                "tone_rmse": "#fb7185",
+                "header": "#202020",
+                "header_fg": "#ffffff",
+                "header_muted": "#c5c5c5",
+                "chip": "#323232",
+                "chip_fg": "#ffffff",
+                "point": "#99ebff",
+                "curve": "#60cdff",
+                "residual": "#ffb900",
+                "formula_bg": "#1c1c1c",
+                "formula_fg": "#99ebff",
+                "grid": "#3b3b3b",
+                "zero": "#e6e6e6",
+                "tone_d": "#60cdff",
+                "tone_cs": "#ffb900",
+                "tone_r2": "#a6e9b8",
+                "tone_rmse": "#ff99a4",
+                "explorer": "#252525",
             }
         return {
-            "canvas": "#f5f7fb",
+            "canvas": "#f3f3f3",
             "card": "#ffffff",
-            "ink": "#0f172a",
-            "muted": "#64748b",
-            "line": "#e2e8f0",
-            "accent": "#0f766e",
-            "accent_active": "#115e59",
-            "on_accent": "#f0fdfa",
-            "quiet": "#f1f5f9",
-            "quiet_active": "#e2e8f0",
+            "ink": "#1a1a1a",
+            "muted": "#5d5d5d",
+            "line": "#e5e5e5",
+            "accent": "#005fb8",
+            "accent_active": "#003e92",
+            "on_accent": "#ffffff",
+            "quiet": "#f9f9f9",
+            "quiet_active": "#eaeaea",
             "field": "#ffffff",
             "white": "#ffffff",
-            "header": "#0f172a",
-            "header_muted": "#cbd5e1",
-            "chip": "#1e293b",
-            "chip_fg": "#e2e8f0",
-            "point": "#1d4ed8",
-            "curve": "#0f766e",
-            "residual": "#c2410c",
-            "formula_bg": "#f0fdfa",
-            "formula_fg": "#115e59",
-            "grid": "#e2e8f0",
-            "zero": "#334155",
-            "tone_d": "#0f766e",
-            "tone_cs": "#b45309",
-            "tone_r2": "#1d4ed8",
-            "tone_rmse": "#be123c",
+            "header": "#f9f9f9",
+            "header_fg": "#1a1a1a",
+            "header_muted": "#5d5d5d",
+            "chip": "#f3f3f3",
+            "chip_fg": "#1a1a1a",
+            "point": "#005fb8",
+            "curve": "#0f7b0f",
+            "residual": "#c42b1c",
+            "formula_bg": "#f0f6ff",
+            "formula_fg": "#003e92",
+            "grid": "#eeeeee",
+            "zero": "#5d5d5d",
+            "tone_d": "#005fb8",
+            "tone_cs": "#9d5d00",
+            "tone_r2": "#0f7b0f",
+            "tone_rmse": "#c42b1c",
+            "explorer": "#f9f9f9",
         }
 
     def _remember(self, widget: tk.Widget, **roles: str) -> tk.Widget:
@@ -311,6 +329,17 @@ class DiffusionApp:
             relief="flat",
         )
         self.style.map("Tool.TButton", background=[("active", p["quiet_active"])])
+        self.style.configure(
+            "Treeview",
+            background=p["card"],
+            fieldbackground=p["card"],
+            foreground=p["ink"],
+            bordercolor=p["line"],
+            rowheight=24,
+            font=("Segoe UI", 9),
+        )
+        self.style.configure("Treeview.Heading", background=p["quiet"], foreground=p["ink"], font=("Segoe UI", 8, "bold"), relief="flat")
+        self.style.map("Treeview", background=[("selected", p["accent"])], foreground=[("selected", p["on_accent"])])
 
     def _apply_theme(self) -> None:
         self.p = self._palette()
@@ -324,7 +353,7 @@ class DiffusionApp:
                 pass
         menu_bg = self.p["card"]
         menu_fg = self.p["ink"]
-        for menu in (self.app_menu, self.file_menu, self.view_menu, self.help_menu):
+        for menu in (self.app_menu, self.file_menu, self.view_menu, self.analysis_menu, self.help_menu):
             menu.configure(bg=menu_bg, fg=menu_fg, activebackground=self.p["accent"], activeforeground=self.p["on_accent"])
         self.theme_button.configure(
             text="Light mode" if self.dark_mode else "Dark mode",
@@ -343,8 +372,10 @@ class DiffusionApp:
         self.header.configure(bg=self.p["header"])
         self.header_mark.configure(bg=self.p["header"])
         self.header_titles.configure(bg=self.p["header"])
-        self.header_title.configure(bg=self.p["header"], fg="#f8fafc")
+        self.header_title.configure(bg=self.p["header"], fg=self.p["header_fg"])
         self.header_subtitle.configure(bg=self.p["header"], fg=self.p["header_muted"])
+        if hasattr(self, "ribbon"):
+            self.ribbon.configure(bg=self.p["header"])
         if hasattr(self, "residual_toggle"):
             self.residual_toggle.configure(
                 bg=self.p["card"],
@@ -364,8 +395,10 @@ class DiffusionApp:
             except tk.TclError:
                 pass
         self._style_tabs()
-        if self.loaded_data is not None or self.current_result is not None:
-            self._draw_chart()
+        self._refresh_project_tree()
+        self._refresh_workbook()
+        if self.loaded_data is not None or self.current_result is not None or self.graph_mode.get() == "arrhenius":
+            self._redraw_active_graph()
         else:
             self._show_placeholder()
 
@@ -376,19 +409,28 @@ class DiffusionApp:
     def _build_menu(self) -> None:
         menu = tk.Menu(self.root, tearoff=False)
         file_menu = tk.Menu(menu, tearoff=False)
-        file_menu.add_command(label="Open CSV profile…", accelerator="Ctrl+O", command=self._browse_csv)
+        file_menu.add_command(label="Import workbook (CSV)…", accelerator="Ctrl+O", command=self._browse_csv)
+        file_menu.add_command(label="Paste table", accelerator="Ctrl+V", command=self._paste_workbook)
         file_menu.add_command(label="Check for updates", command=self._check_for_updates)
         file_menu.add_separator()
         file_menu.add_command(label="Export fit report…", command=self._export_report)
-        file_menu.add_command(label="Save chart image…", accelerator="Ctrl+Shift+S", command=self._export_plot)
+        file_menu.add_command(label="Export graph…", accelerator="Ctrl+Shift+S", command=self._export_plot)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.root.destroy)
         menu.add_cascade(label="File", menu=file_menu)
         view_menu = tk.Menu(menu, tearoff=False)
+        view_menu.add_command(label="Graph 1 · Profile", command=lambda: self._set_graph_mode("profile"))
+        view_menu.add_command(label="Graph 2 · ln(D) vs 1/kT", command=lambda: self._set_graph_mode("arrhenius"))
+        view_menu.add_separator()
         view_menu.add_command(label="Toggle dark appearance", command=self._toggle_theme)
         view_menu.add_command(label="Toggle fullscreen", accelerator="F11", command=self._toggle_fullscreen)
         menu.add_cascade(label="View", menu=view_menu)
+        analysis_menu = tk.Menu(menu, tearoff=False)
+        analysis_menu.add_command(label="Fit active sheet", accelerator="Enter", command=self._start_fit)
+        analysis_menu.add_command(label="Linearize 1/kT plot", command=self._fit_arrhenius)
+        menu.add_cascade(label="Analysis", menu=analysis_menu)
         help_menu = tk.Menu(menu, tearoff=False)
+        help_menu.add_command(label="Tutorial", accelerator="F1", command=self._show_tutorial)
         help_menu.add_command(label="Keyboard shortcuts", command=self._show_shortcuts)
         help_menu.add_command(label="How updates work", command=self._show_update_guide)
         help_menu.add_command(label="Model assumptions", command=self._show_assumptions)
@@ -400,7 +442,10 @@ class DiffusionApp:
         self.app_menu = menu
         self.file_menu = file_menu
         self.view_menu = view_menu
+        self.analysis_menu = analysis_menu
         self.help_menu = help_menu
+        self.root.bind_all("<F1>", lambda _event: self._show_tutorial())
+        self.root.bind_all("<Control-v>", self._handle_paste_shortcut)
 
     def _handle_open_shortcut(self, _event=None):
         self._browse_csv()
@@ -418,12 +463,127 @@ class DiffusionApp:
     def _show_shortcuts(self) -> None:
         messagebox.showinfo(
             "Keyboard shortcuts",
-            "Ctrl+O    Open one or more CSV profiles\n"
-            "Enter or Ctrl+Enter    Fit the active profile\n"
-            "Ctrl+Shift+S    Export the chart\n"
+            "F1    Tutorial\n"
+            "Ctrl+O    Import workbook sheets\n"
+            "Ctrl+V    Paste a table into the workbook\n"
+            "Enter or Ctrl+Enter    Fit the active sheet\n"
+            "Ctrl+Shift+S    Export the graph (choose size)\n"
             "F11    Toggle fullscreen",
             parent=self.root,
         )
+
+    def _tutorial_text(self) -> str:
+        return (
+            "FickLab 1.5.0 tutorial\n"
+            "The window is laid out like Origin: Project explorer, setup, Graph 1 / Graph 2, and a workbook.\n\n"
+            "1. Import\n"
+            "   File → Import workbook, or the Import ribbon button, or Ctrl+O. Each CSV is a sheet.\n"
+            "   Paste a two-column table (depth, concentration) with Ctrl+V.\n"
+            "   Double-click a workbook cell to edit it, then Apply table to plot.\n\n"
+            "2. Time\n"
+            "   Enter diffusion time in hours. The app converts to seconds automatically (1 h = 3600 s)\n"
+            "   before fitting, so D is in (depth unit)²/s.\n\n"
+            "3. Fit D\n"
+            "   Set C₀, depth scale, and scenario, then Fit D or press Enter.\n"
+            "   Graph 1 shows the measured profile, the erfc model, and residuals.\n\n"
+            "4. Arrhenius 1/kT\n"
+            "   Set temperature in K (or °C) on each fitted sheet. Open Graph 2 and Fit 1/kT line.\n"
+            "   x = 1/(kT) with k = 8.617333262×10⁻⁵ eV/K. y = ln(D).\n"
+            "   Error of ln(D) is σ_D / D (divide the diffusivity error by D itself).\n"
+            "   Those y-errors weight the line. Slope and intercept errors come from that residual.\n"
+            "   Relative errors are σ_slope/|slope| and σ_intercept/|intercept|.\n"
+            "   ln(D) = ln(D₀) − E_a · (1/kT), so slope = −E_a (eV) and intercept = ln(D₀).\n\n"
+            "5. Export a graph for a presentation\n"
+            "   Export graph lets you set width, height (inches), and DPI, then save PNG, SVG, or PDF.\n\n"
+            "6. Updates\n"
+            "   Open FickLab from the Start menu shortcut. Check for updates replaces that copy.\n"
+        )
+
+    def _show_tutorial(self, _event=None):
+        window = tk.Toplevel(self.root)
+        window.title("FickLab tutorial")
+        window.geometry("720x560")
+        window.configure(bg=self.p["card"])
+        window.transient(self.root)
+        text = tk.Text(window, wrap="word", font=("Segoe UI", 10), bg=self.p["card"], fg=self.p["ink"], relief="flat", padx=16, pady=16)
+        text.pack(fill="both", expand=True)
+        text.insert("1.0", self._tutorial_text())
+        text.configure(state="disabled")
+        return "break"
+
+    def _sync_time_seconds(self) -> None:
+        try:
+            hours = float(self.time_var.get().strip())
+            seconds = arrhenius.hours_to_seconds(hours)
+            self.time_seconds_var.set(f"= {seconds:g} s   (used in the Fick fit)")
+        except (ValueError, TypeError):
+            self.time_seconds_var.set("Enter hours. The fit uses seconds.")
+
+    def _on_temperature_k(self) -> None:
+        if self._syncing_temperature:
+            return
+        text = self.temperature_k_var.get().strip()
+        if not text:
+            return
+        try:
+            kelvin = float(text)
+            self._syncing_temperature = True
+            self.temperature_c_var.set(f"{arrhenius.kelvin_to_celsius(kelvin):.4g}")
+        except ValueError:
+            pass
+        finally:
+            self._syncing_temperature = False
+
+    def _on_temperature_c(self) -> None:
+        if self._syncing_temperature:
+            return
+        text = self.temperature_c_var.get().strip()
+        if not text:
+            return
+        try:
+            celsius = float(text)
+            self._syncing_temperature = True
+            self.temperature_k_var.set(f"{arrhenius.celsius_to_kelvin(celsius):.4g}")
+        except ValueError:
+            pass
+        finally:
+            self._syncing_temperature = False
+
+    def _time_seconds(self) -> float:
+        return arrhenius.hours_to_seconds(self._numeric_input(self.time_var, "Diffusion time in hours"))
+
+    def _temperature_K(self) -> float | None:
+        text = self.temperature_k_var.get().strip()
+        if not text:
+            return None
+        kelvin = self._numeric_input(self.temperature_k_var, "Temperature")
+        if kelvin <= 0:
+            raise ValueError("Temperature must be positive kelvin")
+        return kelvin
+
+    def _set_graph_mode(self, mode: str) -> None:
+        self.graph_mode.set(mode)
+        if mode == "arrhenius":
+            self._draw_arrhenius_chart()
+        elif self.loaded_data is not None or self.current_result is not None:
+            self._draw_chart()
+        else:
+            self._show_placeholder()
+
+    def _redraw_active_graph(self) -> None:
+        if self.graph_mode.get() == "arrhenius":
+            self._draw_arrhenius_chart()
+        elif self.loaded_data is not None or self.current_result is not None:
+            self._draw_chart()
+        else:
+            self._show_placeholder()
+
+    def _handle_paste_shortcut(self, _event=None):
+        widget = self.root.focus_get()
+        if isinstance(widget, (ttk.Entry, tk.Entry, tk.Text)):
+            return None
+        self._paste_workbook()
+        return "break"
 
     def _show_assumptions(self) -> None:
         messagebox.showinfo(
@@ -440,11 +600,10 @@ class DiffusionApp:
     def _show_about(self) -> None:
         messagebox.showinfo(
             "About FickLab",
-            f"FickLab {app_version.APP_VERSION} fits a measured concentration profile to Fick's second law.\n\n"
-            "Load depth and concentration, plot the distribution, and recover the surface "
-            "concentration Cₛ and diffusivity D. Scenario 3 does that by brute-force search.\n\n"
-            "Check for updates looks at the latest GitHub release and can replace FickLab.exe "
-            "when that release has a higher version number.",
+            f"FickLab {app_version.APP_VERSION} is an Origin-style workbench for Fick profiles and Arrhenius 1/kT plots.\n\n"
+            "Enter time in hours (converted to seconds), fit D, then linearize ln(D) vs 1/(kT).\n"
+            "k = 8.617333262×10⁻⁵ eV/K. Error of ln(D) is σ_D / D.\n\n"
+            "Check for updates replaces the Start menu copy when a higher GitHub release is published.",
             parent=self.root,
         )
 
@@ -606,11 +765,11 @@ class DiffusionApp:
         self.header_mark.create_oval(25, 7, 31, 13, fill="#99f6e4", outline="")
         self.header_titles = tk.Frame(self.header, bg=self.p["header"])
         self.header_titles.pack(side="left", fill="both", expand=True, pady=14)
-        self.header_title = tk.Label(self.header_titles, text="FickLab", bg=self.p["header"], fg="#f8fafc", font=("Segoe UI", 20, "bold"))
+        self.header_title = tk.Label(self.header_titles, text="FickLab", bg=self.p["header"], fg=self.p["header_fg"], font=("Segoe UI", 18, "bold"))
         self.header_title.pack(anchor="w")
         self.header_subtitle = tk.Label(
             self.header_titles,
-            text="Fick's second law  ·  semi-infinite solid, fixed surface concentration",
+            text="Project  ·  Workbooks  ·  Graphs  ·  Fick profile and Arrhenius 1/kT",
             bg=self.p["header"],
             fg=self.p["header_muted"],
             font=("Segoe UI", 10),
@@ -661,10 +820,23 @@ class DiffusionApp:
         )
         self.workspace_chip.pack(side="right", padx=(0, 8), pady=18)
         self.header.bind("<Configure>", self._fit_header_text, add="+")
-        self._frame(self.root, "accent", height=3).pack(fill="x")
+        self.ribbon = tk.Frame(self.root, bg=self.p["header"])
+        self.ribbon.pack(fill="x")
+        for text, command in (
+            ("Import", self._browse_csv),
+            ("Paste", self._paste_workbook),
+            ("Fit D", self._start_fit),
+            ("1/kT", self._fit_arrhenius),
+            ("Profile", lambda: self._set_graph_mode("profile")),
+            ("Arrhenius", lambda: self._set_graph_mode("arrhenius")),
+            ("Export graph", self._export_plot),
+            ("Tutorial", self._show_tutorial),
+        ):
+            self._button(self.ribbon, text, command, kind="tool").pack(side="left", padx=(10 if text == "Import" else 4, 0), pady=8)
+        self._frame(self.root, "accent", height=2).pack(fill="x")
 
         body = self._frame(self.root, "canvas")
-        body.pack(fill="both", expand=True, padx=12, pady=(8, 4))
+        body.pack(fill="both", expand=True, padx=8, pady=(6, 4))
         body.grid_columnconfigure(0, weight=1)
         body.grid_rowconfigure(1, weight=1)
 
@@ -675,16 +847,23 @@ class DiffusionApp:
         self.tab_row.grid(row=0, column=0, sticky="w")
         actions = self._frame(page_bar, "canvas")
         actions.grid(row=0, column=1, sticky="e")
-        self.add_pages_button = self._button(actions, "+ Add CSV", self._browse_csv, kind="tool")
+        self.add_pages_button = self._button(actions, "+ Sheet", self._browse_csv, kind="tool")
         self.add_pages_button.pack(side="left", padx=(8, 6))
-        self.close_page_button = self._button(actions, "Close", self._close_active_profile, kind="tool")
+        self.close_page_button = self._button(actions, "Close sheet", self._close_active_profile, kind="tool")
         self.close_page_button.pack(side="left")
 
         self.main_pane = tk.PanedWindow(
-            body, orient="horizontal", sashwidth=8, sashrelief="flat", bd=0, bg=self.p["canvas"], opaqueresize=True
+            body, orient="horizontal", sashwidth=6, sashrelief="flat", bd=0, bg=self.p["canvas"], opaqueresize=True
         )
         self._remember(self.main_pane, bg="canvas")
         self.main_pane.grid(row=1, column=0, sticky="nsew")
+
+        explorer_outer = self._frame(self.main_pane, "explorer", highlightthickness=1, highlightbackground=self.p["line"])
+        self._remember(explorer_outer, bg="explorer", highlightbackground="line")
+        self._lbl(explorer_outer, "PROJECT", bg="explorer", fg="muted", size=8, bold=True).pack(fill="x", padx=10, pady=(10, 4))
+        self.explorer = ttk.Treeview(explorer_outer, show="tree", selectmode="browse")
+        self.explorer.pack(fill="both", expand=True, padx=6, pady=(0, 8))
+        self.explorer.bind("<<TreeviewSelect>>", self._on_project_select)
 
         sidebar_outer = self._frame(self.main_pane, "card", highlightthickness=1, highlightbackground=self.p["line"])
         self.sidebar_outer = self._remember(sidebar_outer, bg="card", highlightbackground="line")
@@ -698,8 +877,9 @@ class DiffusionApp:
         self.content.grid_columnconfigure(0, weight=1)
         self.content.grid_rowconfigure(1, weight=1)
         self._build_results_area()
-        self.main_pane.add(sidebar_outer, minsize=300, width=340)
-        self.main_pane.add(self.content, minsize=560)
+        self.main_pane.add(explorer_outer, minsize=160, width=200)
+        self.main_pane.add(sidebar_outer, minsize=280, width=320)
+        self.main_pane.add(self.content, minsize=520)
         self.root.bind_all("<MouseWheel>", self._on_sidebar_mousewheel, add="+")
         self.root.bind_all("<Button-4>", self._on_sidebar_mousewheel, add="+")
         self.root.bind_all("<Button-5>", self._on_sidebar_mousewheel, add="+")
@@ -819,7 +999,18 @@ class DiffusionApp:
         self.summary_label.pack(fill="x", padx=16, pady=(10, 0))
 
         self._section("Known conditions")
-        self.time_entry = self._field("Diffusion time  t", self.time_var)
+        self.time_entry = self._field("Diffusion time  t  (hours)", self.time_var)
+        self.time_seconds_label = self._lbl(self.sidebar, bg="card", fg="muted", size=8, textvariable=self.time_seconds_var)
+        self.time_seconds_label.pack(fill="x", padx=16, pady=(4, 0))
+        temp_row = self._frame(self.sidebar, "card")
+        temp_row.pack(fill="x", padx=16, pady=(8, 0))
+        temp_row.grid_columnconfigure(0, weight=1)
+        temp_row.grid_columnconfigure(1, weight=1)
+        self._lbl(temp_row, "Temperature T (K)", bg="card", fg="muted", size=9).grid(row=0, column=0, sticky="w", pady=(0, 3))
+        self._lbl(temp_row, "T (°C)", bg="card", fg="muted", size=9).grid(row=0, column=1, sticky="w", padx=(8, 0), pady=(0, 3))
+        ttk.Entry(temp_row, textvariable=self.temperature_k_var).grid(row=1, column=0, sticky="ew")
+        ttk.Entry(temp_row, textvariable=self.temperature_c_var).grid(row=1, column=1, sticky="ew", padx=(8, 0))
+        self._lbl(self.sidebar, f"1/kT uses k = {arrhenius.K_BOLTZMANN_EV:g} eV/K", bg="card", fg="muted", size=8).pack(fill="x", padx=16, pady=(4, 0))
         self.c0_entry = self._field("Bulk concentration  C₀", self.c0_var)
         self._button(self.sidebar, "Use deepest points as C₀", self._suggest_c0, kind="tool").pack(fill="x", padx=16, pady=(6, 0))
         self.cs_entry = self._field("Surface concentration  Cₛ   (Scenario 1)", self.cs_var)
@@ -829,13 +1020,13 @@ class DiffusionApp:
         units.pack(fill="x", padx=16, pady=(10, 12))
         for column in range(3):
             units.grid_columnconfigure(column, weight=1)
-        captions = (("Depth scale", 0, 0), ("Depth unit", 1, 0), ("Concentration unit", 2, 0), ("Time unit", 0, 2))
+        captions = (("Depth scale", 0, 0), ("Depth unit", 1, 0), ("Concentration unit", 2, 0))
         for caption, column, row in captions:
             self._lbl(units, caption, bg="card", fg="muted", size=9).grid(row=row, column=column, sticky="w", padx=(8 if column else 0, 0), pady=(8 if row else 0, 3))
         ttk.Entry(units, textvariable=self.x_scale_var).grid(row=1, column=0, sticky="ew")
         ttk.Entry(units, textvariable=self.x_unit_var).grid(row=1, column=1, sticky="ew", padx=(8, 0))
         ttk.Entry(units, textvariable=self.c_unit_var).grid(row=1, column=2, sticky="ew", padx=(8, 0))
-        ttk.Entry(units, textvariable=self.t_unit_var).grid(row=3, column=0, sticky="ew", pady=(0, 2))
+        self._lbl(units, "Time is entered in hours and converted to seconds for D.", bg="card", fg="muted", size=8).grid(row=2, column=0, columnspan=3, sticky="w", pady=(8, 0))
         presets = self._frame(self.sidebar, "card")
         presets.pack(fill="x", padx=16, pady=(8, 4))
         self._lbl(presets, "Depth presets", bg="card", fg="muted", size=9).pack(anchor="w", pady=(0, 4))
@@ -963,6 +1154,39 @@ class DiffusionApp:
             textvariable=self.formula_var,
         ).pack(side="left", padx=12, pady=4)
 
+        workspace = self._frame(self.content, "canvas")
+        workspace.grid(row=3, column=0, sticky="nsew", pady=(8, 0))
+        workspace.grid_columnconfigure(0, weight=1)
+        workspace.grid_rowconfigure(1, weight=1)
+        self.content.grid_rowconfigure(1, weight=3)
+        self.content.grid_rowconfigure(3, weight=1)
+        graph_bar = self._frame(workspace, "canvas")
+        graph_bar.grid(row=0, column=0, sticky="ew", pady=(0, 4))
+        self.profile_graph_button = self._button(graph_bar, "Graph 1  ·  Profile", lambda: self._set_graph_mode("profile"), kind="tool")
+        self.profile_graph_button.pack(side="left")
+        self.arrhenius_graph_button = self._button(graph_bar, "Graph 2  ·  ln(D) vs 1/kT", lambda: self._set_graph_mode("arrhenius"), kind="tool")
+        self.arrhenius_graph_button.pack(side="left", padx=(6, 0))
+        self._button(graph_bar, "Fit 1/kT line", self._fit_arrhenius, kind="accent").pack(side="right")
+
+        book = self._frame(workspace, "card", highlightthickness=1, highlightbackground=self.p["line"])
+        self._remember(book, highlightbackground="line")
+        book.grid(row=1, column=0, sticky="nsew")
+        book.grid_columnconfigure(0, weight=1)
+        book.grid_rowconfigure(1, weight=1)
+        book_header = self._frame(book, "card")
+        book_header.grid(row=0, column=0, sticky="ew", padx=10, pady=(6, 0))
+        self._lbl(book_header, "Workbook", bg="card", fg="ink", size=11, bold=True).pack(side="left")
+        self._lbl(book_header, "Double-click a cell to edit. Ctrl+V pastes a table.", bg="card", fg="muted", size=8).pack(side="left", padx=(10, 0))
+        self._button(book_header, "Apply table to plot", self._apply_workbook, kind="tool").pack(side="right")
+        columns = ("row", "depth", "concentration", "model", "residual")
+        self.workbook = ttk.Treeview(book, columns=columns, show="headings", selectmode="browse", height=7)
+        headings = (("row", "#"), ("depth", "Depth"), ("concentration", "C"), ("model", "Model"), ("residual", "Residual"))
+        for key, title in headings:
+            self.workbook.heading(key, text=title)
+            self.workbook.column(key, width=80 if key != "row" else 40, anchor="e")
+        self.workbook.grid(row=1, column=0, sticky="nsew", padx=8, pady=(4, 8))
+        self.workbook.bind("<Double-1>", self._edit_workbook_cell)
+
     def _show_placeholder(self) -> None:
         self._draw_generation += 1
         self.figure = None
@@ -973,7 +1197,7 @@ class DiffusionApp:
         holder.pack(expand=True, fill="both")
         tk.Label(
             holder,
-            text="The concentration profile will be plotted here.\n\nLoad a CSV of depth and concentration, then fit Cₛ and D.",
+            text="The concentration profile will be plotted here.\n\nImport a workbook sheet or paste a table, then fit Cₛ and D.",
             bg=self.p["card"],
             fg=self.p["muted"],
             font=("Segoe UI", 12),
@@ -1198,6 +1422,8 @@ class DiffusionApp:
             "result": None,
             "fit_data": None,
             "label": label,
+            "time_hours": self.time_var.get(),
+            "temperature_k": self.temperature_k_var.get(),
         }
         self.profile_order.append(profile_id)
         button = tk.Button(
@@ -1249,9 +1475,11 @@ class DiffusionApp:
                 "c_col": "1",
                 "result": None,
                 "fit_data": None,
-                "label": "Profile 1",
+                "label": "Sheet 1",
+                "time_hours": self.time_var.get(),
+                "temperature_k": self.temperature_k_var.get(),
             }
-            self._set_tab_text(profile_id, "Profile 1")
+            self._set_tab_text(profile_id, "Sheet 1")
             self._restore_profile(profile_id)
             return
         index = self.profile_order.index(profile_id)
@@ -1275,6 +1503,8 @@ class DiffusionApp:
             c_col=self.c_col_var.get(),
             result=self.current_result,
             fit_data=self.current_fit_data,
+            time_hours=self.time_var.get(),
+            temperature_k=self.temperature_k_var.get(),
         )
         self._update_header_workspace()
 
@@ -1291,8 +1521,14 @@ class DiffusionApp:
         self.c_col_combo.configure(values=columns)
         self.current_result = profile["result"]
         self.current_fit_data = profile["fit_data"]
+        if profile.get("time_hours"):
+            self.time_var.set(profile["time_hours"])
+        if "temperature_k" in profile:
+            self.temperature_k_var.set(profile.get("temperature_k") or "")
         self._refresh_summary()
         self._style_tabs()
+        self._refresh_project_tree()
+        self._refresh_workbook()
         if self.current_result is None:
             self._clear_metrics()
             self._set_export_enabled(False)
@@ -1507,7 +1743,8 @@ class DiffusionApp:
         if last_id is not None:
             self.active_profile_id = None
             self._select_profile(last_id)
-        self.status_var.set(f"Added {added} profile{'s' if added != 1 else ''}. Check C₀, then fit.")
+            self._refresh_project_tree()
+        self.status_var.set(f"Added {added} sheet{'s' if added != 1 else ''}. Set hours and C₀, then fit.")
 
     def _reload_active_file(self) -> None:
         path = self.file_var.get().strip()
@@ -1528,6 +1765,7 @@ class DiffusionApp:
         self._set_export_enabled(False)
         self._save_active_profile()
         self._refresh_summary()
+        self._refresh_workbook()
         self._draw_chart()
         self.status_var.set("Columns updated. Fit again to refresh D and Cₛ.")
 
@@ -1547,11 +1785,13 @@ class DiffusionApp:
             messagebox.showinfo("Choose data", "Select a CSV file of depth and concentration first.", parent=self.root)
             return
         try:
-            time = self._numeric_input(self.time_var, "Diffusion time")
+            hours = self._numeric_input(self.time_var, "Diffusion time in hours")
+            time = arrhenius.hours_to_seconds(hours)
+            temperature = self._temperature_K()
             c0 = self._numeric_input(self.c0_var, "C₀")
             x_scale = self._numeric_input(self.x_scale_var, "Depth scale")
-            if time <= 0 or x_scale <= 0:
-                raise ValueError("Time and depth scale must be positive")
+            if x_scale <= 0:
+                raise ValueError("Depth scale must be positive")
             scenario = self.scenario_var.get()
             cs = self._numeric_input(self.cs_var, "Cₛ") if scenario.startswith("Scenario 1") else None
             steps = int(self._numeric_input(self.grid_steps_var, "Cₛ grid points")) if scenario.startswith("Scenario 3") else None
@@ -1574,6 +1814,8 @@ class DiffusionApp:
         options = {
             "scenario": scenario,
             "time": time,
+            "time_hours": hours,
+            "temperature_K": temperature,
             "c0": c0,
             "cs": cs,
             "steps": steps,
@@ -1585,7 +1827,7 @@ class DiffusionApp:
             "profile_id": self.active_profile_id,
             "x_unit": self.x_unit_var.get().strip() or "depth",
             "c_unit": self.c_unit_var.get().strip(),
-            "t_unit": self.t_unit_var.get().strip() or "time",
+            "t_unit": "s",
             "source_label": self.profiles.get(self.active_profile_id, {}).get("label", "Profile"),
         }
         self.fit_button.configure(state="disabled", text="Fitting…")
@@ -1659,6 +1901,8 @@ class DiffusionApp:
             "x": x,
             "measured_c": measured_c,
             "t": options["time"],
+            "t_hours": options["time_hours"],
+            "temperature_K": options["temperature_K"],
             "C_s": surface,
             "C_0": options["c0"],
             "x_unit": options["x_unit"],
@@ -1724,11 +1968,21 @@ class DiffusionApp:
         self.metric_details["rmse"].set("Root-mean-square residual")
         length = self._diffusion_length(result.D, fit["t"])
         self.formula_var.set(f"C(x, t) = C₀ + (Cₛ − C₀) · erfc( x / 2√(Dt) )      L = {length:.4g} {fit['x_unit']}")
-        self.chart_title_var.set("Measured profile and fitted model")
-        self.chart_subtitle_var.set(f"{fit['scenario']}   ·   {fit['source']}   ·   {len(fit['x'])} points   ·   t = {fit['t']:g} {fit['t_unit']}")
-        self._draw_chart()
+        self.chart_title_var.set("Graph 1  ·  measured profile and fitted model")
+        hours = fit.get("t_hours")
+        time_note = f"t = {hours:g} h = {fit['t']:g} s" if hours else f"t = {fit['t']:g} {fit['t_unit']}"
+        temperature = fit.get("temperature_K")
+        if temperature:
+            time_note += f"   ·   T = {temperature:g} K   ·   1/kT = {arrhenius.inv_kT(temperature):.4g} eV⁻¹"
+        self.chart_subtitle_var.set(f"{fit['scenario']}   ·   {fit['source']}   ·   {len(fit['x'])} points   ·   {time_note}")
         self._set_export_enabled(True)
         self._refresh_summary()
+        self._refresh_workbook()
+        self._refresh_project_tree()
+        if self.graph_mode.get() == "arrhenius":
+            self._draw_arrhenius_chart()
+        else:
+            self._draw_chart()
 
     def _draw_chart(self) -> None:
         raw = self.loaded_data
@@ -1775,7 +2029,7 @@ class DiffusionApp:
             residual_ax = None
             self.figure.subplots_adjust(left=0.08, right=0.985, bottom=0.1, top=0.96)
             if not has_fit:
-                self.chart_title_var.set("Measured concentration profile")
+                self.chart_title_var.set("Graph 1  ·  concentration profile")
                 self.chart_subtitle_var.set(f"{measured.size} points   ·   fit to overlay the model")
 
         concentration_label = f"Concentration ({concentration_unit})" if concentration_unit else "Concentration"
@@ -1930,7 +2184,8 @@ class DiffusionApp:
             f"Scenario: {fit['scenario']}",
             f"Source: {fit['source']}",
             f"Points: {len(fit['x'])}",
-            f"Time: {fit['t']:g} {fit['t_unit']}",
+            f"Time: {fit.get('t_hours', fit['t']/3600):g} h = {fit['t']:g} s",
+            f"Temperature: {fit.get('temperature_K') or '—'} K",
             f"C_0: {fit['C_0']:g} {cs_unit}",
             f"D: {result.D:.8g} {d_unit}",
             f"Diffusion length L: {self._diffusion_length(result.D, fit['t']):.6g} {fit['x_unit']}",
@@ -1987,7 +2242,15 @@ class DiffusionApp:
             writer.writerow(("Depth column", fit["x_column"], ""))
             writer.writerow(("Concentration column", fit["c_column"], ""))
             writer.writerow(("Depth scale applied", fit["x_scale"], "multiplier"))
+            writer.writerow(("Diffusion time t", fit.get("t_hours", ""), "h"))
             writer.writerow(("Diffusion time t", fit["t"], time_unit))
+            writer.writerow(("Temperature", fit.get("temperature_K") or "", "K"))
+            if fit.get("temperature_K"):
+                writer.writerow(("1/kT", arrhenius.inv_kT(fit["temperature_K"]), "eV^-1"))
+            if result.D > 0 and result.D_err:
+                ln_D, ln_err = arrhenius.ln_diffusion_error(result.D, result.D_err)
+                writer.writerow(("ln(D)", ln_D, ""))
+                writer.writerow(("error of ln(D) = sigma_D / D", ln_err, ""))
             writer.writerow(("Initial / bulk concentration C_0", fit["C_0"], cs_unit))
             writer.writerow(("Diffusion coefficient D", result.D, d_unit))
             writer.writerow(("D standard error", result.D_err, d_unit))
@@ -2010,20 +2273,364 @@ class DiffusionApp:
 
     def _export_plot(self) -> None:
         if self.figure is None:
+            if self.graph_mode.get() == "arrhenius":
+                self._draw_arrhenius_chart()
+            elif self.loaded_data is not None or self.current_result is not None:
+                self._draw_chart()
+        if self.figure is None:
+            messagebox.showinfo("Export graph", "Plot a graph first.", parent=self.root)
             return
-        path = filedialog.asksaveasfilename(
-            title="Save plot image",
-            defaultextension=".png",
-            initialfile=f"{self._default_export_stem()}.png",
-            filetypes=[("PNG image", "*.png"), ("SVG image", "*.svg"), ("PDF document", "*.pdf")],
-        )
-        if not path:
+        window = tk.Toplevel(self.root)
+        window.title("Export graph")
+        window.configure(bg=self.p["card"])
+        window.transient(self.root)
+        window.resizable(True, True)
+        self._lbl(window, "Choose the figure size for a presentation.", bg="card", fg="ink", size=11, bold=True).pack(anchor="w", padx=16, pady=(16, 8))
+        grid = self._frame(window, "card")
+        grid.pack(fill="x", padx=16)
+        for column in range(3):
+            grid.grid_columnconfigure(column, weight=1)
+        self._lbl(grid, "Width (in)", bg="card", fg="muted", size=9).grid(row=0, column=0, sticky="w")
+        self._lbl(grid, "Height (in)", bg="card", fg="muted", size=9).grid(row=0, column=1, sticky="w", padx=(8, 0))
+        self._lbl(grid, "DPI", bg="card", fg="muted", size=9).grid(row=0, column=2, sticky="w", padx=(8, 0))
+        ttk.Entry(grid, textvariable=self.export_width_in).grid(row=1, column=0, sticky="ew")
+        ttk.Entry(grid, textvariable=self.export_height_in).grid(row=1, column=1, sticky="ew", padx=(8, 0))
+        ttk.Entry(grid, textvariable=self.export_dpi).grid(row=1, column=2, sticky="ew", padx=(8, 0))
+        preview = tk.StringVar(value="")
+
+        def update_preview(*_args) -> None:
+            try:
+                width = float(self.export_width_in.get())
+                height = float(self.export_height_in.get())
+                dpi = float(self.export_dpi.get())
+                preview.set(f"{width * dpi:.0f} × {height * dpi:.0f} pixels")
+            except ValueError:
+                preview.set("Enter width, height, and DPI.")
+
+        self.export_width_in.trace_add("write", update_preview)
+        self.export_height_in.trace_add("write", update_preview)
+        self.export_dpi.trace_add("write", update_preview)
+        update_preview()
+        self._lbl(window, bg="card", fg="muted", size=9, textvariable=preview).pack(anchor="w", padx=16, pady=(8, 0))
+
+        def save() -> None:
+            try:
+                width = float(self.export_width_in.get())
+                height = float(self.export_height_in.get())
+                dpi = float(self.export_dpi.get())
+                if width <= 0 or height <= 0 or dpi <= 0:
+                    raise ValueError("Width, height, and DPI must be positive.")
+            except ValueError as error:
+                messagebox.showerror("Export graph", str(error), parent=window)
+                return
+            path = filedialog.asksaveasfilename(
+                parent=window,
+                title="Save graph image",
+                defaultextension=".png",
+                initialfile=f"{self._default_export_stem()}.png",
+                filetypes=[("PNG image", "*.png"), ("SVG image", "*.svg"), ("PDF document", "*.pdf")],
+            )
+            if not path:
+                return
+            original = self.figure.get_size_inches().copy()
+            try:
+                self.figure.set_size_inches(width, height)
+                self.figure.savefig(path, dpi=dpi, bbox_inches="tight", facecolor=self.figure.get_facecolor())
+            except OSError as error:
+                messagebox.showerror("Could not save plot", str(error), parent=window)
+                return
+            finally:
+                self.figure.set_size_inches(original)
+                self.canvas.draw_idle()
+            self.status_var.set(f"Graph saved to {path}  ·  {width:g}×{height:g} in at {dpi:g} dpi")
+            window.destroy()
+
+        button_row = self._frame(window, "card")
+        button_row.pack(fill="x", padx=16, pady=16)
+        self._button(button_row, "Save image", save, kind="accent").pack(side="right")
+        self._button(button_row, "Cancel", window.destroy, kind="tool").pack(side="right", padx=(0, 8))
+
+    def _arrhenius_points(self) -> list[dict]:
+        points = []
+        for profile_id in self.profile_order:
+            profile = self.profiles[profile_id]
+            result = profile.get("result")
+            fit = profile.get("fit_data") or {}
+            temperature = fit.get("temperature_K")
+            if temperature is None:
+                try:
+                    raw = profile.get("temperature_k") or ""
+                    temperature = float(raw) if str(raw).strip() else None
+                except ValueError:
+                    temperature = None
+            if result is None or temperature is None:
+                continue
+            sigma = result.D_err if result.D_err and math.isfinite(result.D_err) and result.D_err > 0 else None
+            if sigma is None:
+                rmse = getattr(result, "rmse", 0.0) or 0.0
+                span = abs((fit.get("C_s") or 0.0) - (fit.get("C_0") or 0.0)) or 1.0
+                sigma = abs(result.D) * (rmse / span) if rmse > 0 else None
+            if sigma is None:
+                continue
+            try:
+                ln_D, ln_err = arrhenius.ln_diffusion_error(result.D, sigma)
+                x = arrhenius.inv_kT(temperature)
+            except ValueError:
+                continue
+            points.append(
+                {
+                    "label": profile.get("label", profile_id),
+                    "T": temperature,
+                    "D": result.D,
+                    "D_err": sigma,
+                    "x": x,
+                    "y": ln_D,
+                    "y_err": ln_err,
+                }
+            )
+        return points
+
+    def _fit_arrhenius(self) -> None:
+        points = self._arrhenius_points()
+        if len(points) < 2:
+            messagebox.showinfo(
+                "1/kT plot",
+                "Fit at least two sheets, each with a temperature and a diffusivity error, then linearize.\n\n"
+                "σ_ln(D) = σ_D / D. Those errors set the slope and intercept uncertainties.",
+                parent=self.root,
+            )
             return
         try:
-            self.figure.savefig(path, dpi=220, bbox_inches="tight", facecolor=self.figure.get_facecolor())
-            self.status_var.set(f"Chart saved to {path}")
-        except OSError as error:
-            messagebox.showerror("Could not save plot", str(error), parent=self.root)
+            self.arrhenius_fit = arrhenius.fit_ln_vs_inv_kT(
+                [point["T"] for point in points],
+                [point["D"] for point in points],
+                [point["D_err"] for point in points],
+            )
+        except ValueError as error:
+            messagebox.showerror("1/kT plot", str(error), parent=self.root)
+            return
+        self._set_graph_mode("arrhenius")
+        line = self.arrhenius_fit
+        self.status_var.set(
+            f"ln(D) vs 1/kT  ·  slope = {line.slope:.5g} ± {line.slope_err:.5g}  ·  "
+            f"E_a = {line.activation_eV:.5g} ± {line.activation_err:.5g} eV"
+        )
+
+    def _draw_arrhenius_chart(self) -> None:
+        points = self._arrhenius_points()
+        self._draw_generation += 1
+        self._clear_chart_widgets()
+        self.figure = None
+        self.canvas = None
+        self.toolbar = None
+        width = max(self.chart_host.winfo_width(), 640)
+        height = max(self.chart_host.winfo_height() - 36, 360)
+        dpi = 110
+        p = self.p
+        self.figure = Figure(figsize=(width / dpi, height / dpi), dpi=dpi, facecolor=p["card"])
+        ax = self.figure.add_subplot(111)
+        self.figure.subplots_adjust(left=0.1, right=0.98, bottom=0.14, top=0.96)
+        ax.set_facecolor(p["card"])
+        ax.grid(True, color=p["grid"], linewidth=0.7)
+        ax.tick_params(colors=p["muted"], labelsize=8, length=0)
+        for spine_name, spine in ax.spines.items():
+            spine.set_color(p["line"])
+            if spine_name in ("top", "right"):
+                spine.set_visible(False)
+        self.chart_title_var.set("Graph 2  ·  ln(D) vs 1/kT")
+        if not points:
+            self.chart_subtitle_var.set("Fit two or more sheets at different temperatures, then Fit 1/kT line.")
+            ax.text(0.5, 0.5, "Need two fitted sheets with T and σ_D", ha="center", va="center", transform=ax.transAxes, color=p["muted"])
+        else:
+            x = np.array([point["x"] for point in points], dtype=float)
+            y = np.array([point["y"] for point in points], dtype=float)
+            y_err = np.array([point["y_err"] for point in points], dtype=float)
+            ax.errorbar(x, y, yerr=y_err, fmt="o", color=p["point"], ecolor=p["muted"], capsize=3, label="ln(D) ± σ_D/D")
+            line = self.arrhenius_fit
+            if line is not None:
+                span = np.linspace(float(np.min(x)), float(np.max(x)), 80)
+                ax.plot(span, line.intercept + line.slope * span, color=p["curve"], linewidth=2.2, label="Weighted line")
+                note = (
+                    f"slope  {line.slope:.4g} ± {line.slope_err:.3g}\n"
+                    f"intercept  {line.intercept:.4g} ± {line.intercept_err:.3g}\n"
+                    f"σ_ln / |ln| and σ_m / |m|, σ_b / |b|\n"
+                    f"rel. slope  {line.slope_rel:.3g}   rel. intercept  {line.intercept_rel:.3g}\n"
+                    f"E_a  {line.activation_eV:.4g} ± {line.activation_err:.3g} eV"
+                )
+                ax.text(
+                    0.03,
+                    0.97,
+                    note,
+                    transform=ax.transAxes,
+                    va="top",
+                    fontsize=10,
+                    color=p["ink"],
+                    bbox={"boxstyle": "round,pad=0.5", "facecolor": p["card"], "edgecolor": p["accent"], "alpha": 0.96},
+                )
+                self.chart_subtitle_var.set(
+                    f"{len(points)} points   ·   ln(D) = ln(D₀) − E_a / kT   ·   R² = {line.r_squared:.4f}"
+                )
+            else:
+                self.chart_subtitle_var.set(f"{len(points)} points   ·   Fit 1/kT line for slope and intercept errors")
+            for point in points:
+                ax.annotate(point["label"], (point["x"], point["y"]), textcoords="offset points", xytext=(6, 4), fontsize=8, color=p["muted"])
+        ax.set_xlabel("1/kT  (eV⁻¹)", color=p["ink"], fontsize=9)
+        ax.set_ylabel("ln(D)", color=p["ink"], fontsize=9)
+        legend = ax.legend(frameon=False, loc="best", fontsize=8)
+        if legend:
+            for text in legend.get_texts():
+                text.set_color(p["ink"])
+        self.canvas = FigureCanvasTkAgg(self.figure, master=self.chart_host)
+        self.canvas.draw()
+        widget = self.canvas.get_tk_widget()
+        widget.configure(bg=p["card"])
+        self.toolbar = NavigationToolbar2Tk(self.canvas, self.chart_host, pack_toolbar=False)
+        self.toolbar.update()
+        self.toolbar.pack(side="bottom", fill="x")
+        widget.pack(side="top", fill="both", expand=True)
+        self._set_export_enabled(True)
+        self.root.after_idle(self._sync_figure_size)
+
+    def _refresh_project_tree(self) -> None:
+        if not hasattr(self, "explorer"):
+            return
+        selected = self.active_profile_id
+        self._refreshing_tree = True
+        self.explorer.delete(*self.explorer.get_children())
+        books = self.explorer.insert("", "end", iid="folder-books", text="Workbooks", open=True)
+        graphs = self.explorer.insert("", "end", iid="folder-graphs", text="Graphs", open=True)
+        for profile_id in self.profile_order:
+            label = self.profiles[profile_id].get("label", profile_id)
+            self.explorer.insert(books, "end", iid=profile_id, text=label)
+        self.explorer.insert(graphs, "end", iid="graph-profile", text="Graph 1 · Profile")
+        self.explorer.insert(graphs, "end", iid="graph-arrhenius", text="Graph 2 · ln(D) vs 1/kT")
+        if selected and self.explorer.exists(selected):
+            self.explorer.selection_set(selected)
+        self._refreshing_tree = False
+
+    def _on_project_select(self, _event=None) -> None:
+        if self._refreshing_tree or not hasattr(self, "explorer"):
+            return
+        picked = self.explorer.selection()
+        if not picked:
+            return
+        item = picked[0]
+        if item in self.profiles:
+            self._select_profile(item)
+        elif item == "graph-profile":
+            self._set_graph_mode("profile")
+        elif item == "graph-arrhenius":
+            self._set_graph_mode("arrhenius")
+
+    def _refresh_workbook(self) -> None:
+        if not hasattr(self, "workbook"):
+            return
+        self.workbook.delete(*self.workbook.get_children())
+        raw = self.loaded_data
+        if raw is None:
+            return
+        depths, concentrations = raw
+        predicted = None
+        if self.current_result is not None and self.current_fit_data is not None:
+            predicted = scenario1.concentration(
+                np.asarray(depths, dtype=float) * self._depth_scale(),
+                self.current_result.D,
+                self.current_fit_data["t"],
+                self.current_fit_data["C_s"],
+                self.current_fit_data["C_0"],
+            )
+        for index, (depth, concentration) in enumerate(zip(depths, concentrations), start=1):
+            model = ""
+            residual = ""
+            if predicted is not None:
+                model = f"{predicted[index - 1]:.6g}"
+                residual = f"{concentration - predicted[index - 1]:.6g}"
+            self.workbook.insert("", "end", values=(index, f"{depth:.8g}", f"{concentration:.8g}", model, residual))
+
+    def _edit_workbook_cell(self, event) -> None:
+        row_id = self.workbook.identify_row(event.y)
+        column = self.workbook.identify_column(event.x)
+        if not row_id or column not in ("#2", "#3"):
+            return
+        bbox = self.workbook.bbox(row_id, column)
+        if not bbox:
+            return
+        x, y, width, height = bbox
+        value_index = 1 if column == "#2" else 2
+        current = self.workbook.set(row_id, "depth" if value_index == 1 else "concentration")
+        entry = ttk.Entry(self.workbook)
+        entry.place(x=x, y=y, width=width, height=height)
+        entry.insert(0, current)
+        entry.focus_set()
+
+        def commit(_event=None) -> None:
+            text = entry.get().strip()
+            try:
+                number = float(text)
+            except ValueError:
+                entry.destroy()
+                return
+            values = list(self.workbook.item(row_id, "values"))
+            values[value_index] = f"{number:.8g}"
+            self.workbook.item(row_id, values=values)
+            entry.destroy()
+            self._apply_workbook()
+
+        entry.bind("<Return>", commit)
+        entry.bind("<FocusOut>", commit)
+
+    def _apply_workbook(self) -> None:
+        depths = []
+        concentrations = []
+        for row_id in self.workbook.get_children():
+            values = self.workbook.item(row_id, "values")
+            try:
+                depths.append(float(values[1]))
+                concentrations.append(float(values[2]))
+            except (ValueError, IndexError):
+                continue
+        if len(depths) < 2:
+            return
+        self.loaded_data = (np.asarray(depths, dtype=float), np.asarray(concentrations, dtype=float))
+        self.current_result = None
+        self.current_fit_data = None
+        self._save_active_profile()
+        self._clear_metrics()
+        self._refresh_summary()
+        self._set_graph_mode("profile")
+        self.status_var.set("Workbook applied. Fit again to refresh D.")
+
+    def _paste_workbook(self) -> None:
+        try:
+            text = self.root.clipboard_get()
+        except tk.TclError:
+            messagebox.showinfo("Paste table", "Copy a two-column table first.", parent=self.root)
+            return
+        depths = []
+        concentrations = []
+        for line in text.replace(";", "\t").replace(",", "\t").splitlines():
+            parts = [piece.strip() for piece in line.split("\t") if piece.strip()]
+            if len(parts) < 2:
+                continue
+            try:
+                depths.append(float(parts[0]))
+                concentrations.append(float(parts[1]))
+            except ValueError:
+                continue
+        if len(depths) < 2:
+            messagebox.showerror("Paste table", "Need at least two numeric depth, concentration rows.", parent=self.root)
+            return
+        self.loaded_data = (np.asarray(depths, dtype=float), np.asarray(concentrations, dtype=float))
+        self.loaded_headers = ["depth", "concentration"]
+        self.file_var.set("(pasted workbook)")
+        self.current_result = None
+        self.current_fit_data = None
+        self._clear_metrics()
+        self._save_active_profile()
+        self._refresh_workbook()
+        self._refresh_summary()
+        self._set_graph_mode("profile")
+        self.status_var.set(f"Pasted {len(depths)} rows into the workbook.")
 
 
 def main() -> None:
