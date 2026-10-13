@@ -22,7 +22,7 @@ jobs:
         run: python -m pip install -r requirements-app.txt
 
       - name: Build FickLab.exe
-        run: python -m PyInstaller --noconfirm --clean --noupx FickLab.spec
+        run: python -m PyInstaller --noconfirm --clean FickLab.spec
 
       - name: Verify python312.dll and VC runtime are in the exe
         run: |
