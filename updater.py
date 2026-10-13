@@ -9,6 +9,7 @@ import ssl
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -268,15 +269,28 @@ def download_exe(url: str, progress) -> Path:
     return destination
 
 
+CREATE_BREAKAWAY_FROM_JOB = 0x01000000
+CREATE_NEW_CONSOLE = 0x00000010
+
+
 def _detached(command: list[str], folder: Path) -> None:
+    """Start a helper that keeps running after this windowed exe exits."""
+    startup = subprocess.STARTUPINFO()
+    startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    startup.wShowWindow = 0
     subprocess.Popen(
         command,
         cwd=str(folder),
-        close_fds=True,
+        close_fds=False,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
-        creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP | getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        startupinfo=startup,
+        creationflags=(
+            subprocess.CREATE_NEW_PROCESS_GROUP
+            | CREATE_NEW_CONSOLE
+            | CREATE_BREAKAWAY_FROM_JOB
+        ),
     )
 
 
@@ -294,18 +308,32 @@ def schedule_replacement(downloaded: Path, pid: int | None = None, version: str 
     log = install_directory() / "update.log"
     pid = os.getpid() if pid is None else pid
     downloaded = downloaded.resolve()
+    running = Path(sys.executable).resolve()
     version_text = (version or "").strip()
-    # PowerShell performs the swap. The running exe stays locked until this
-    # process exits, and a batch file with goto inside parentheses was aborting
-    # before it could start the new copy.
+    # The packaged app is two FickLab.exe processes. Waiting only for this PID
+    # left the bootloader locking the file, so the copy failed and nothing relaunched.
+    powershell = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
     body = f"""$ErrorActionPreference = 'Continue'
 $appPid = {int(pid)}
 $target = {_ps_quote(str(target))}
+$running = {_ps_quote(str(running))}
 $downloaded = {_ps_quote(str(downloaded))}
 $log = {_ps_quote(str(log))}
 $version = {_ps_quote(version_text)}
 function Write-Log($message) {{
     Add-Content -LiteralPath $log -Value $message -Encoding ascii
+}}
+function Get-FickLabHolders {{
+    $found = @()
+    $byId = Get-Process -Id $appPid -ErrorAction SilentlyContinue
+    if ($byId) {{ $found += $byId }}
+    $named = Get-Process -Name FickLab -ErrorAction SilentlyContinue
+    foreach ($proc in @($named)) {{
+        if ($proc -and ($found | Where-Object {{ $_.Id -eq $proc.Id }}).Count -eq 0) {{
+            $found += $proc
+        }}
+    }}
+    return $found
 }}
 Set-Content -LiteralPath $log -Value "waiting for $appPid" -Encoding ascii
 $form = $null
@@ -361,14 +389,19 @@ function Pump {{
         [System.Windows.Forms.Application]::DoEvents()
     }}
 }}
-$deadline = (Get-Date).AddSeconds(50)
+$deadline = (Get-Date).AddSeconds(45)
 while ((Get-Date) -lt $deadline) {{
-    $alive = Get-Process -Id $appPid -ErrorAction SilentlyContinue
-    if (-not $alive) {{ break }}
+    $holders = @(Get-FickLabHolders)
+    if ($holders.Count -eq 0) {{ break }}
     Pump
     Start-Sleep -Milliseconds 300
 }}
-Start-Sleep -Milliseconds 600
+$leftover = @(Get-FickLabHolders)
+foreach ($proc in $leftover) {{
+    Write-Log ("stop " + $proc.ProcessId)
+    Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
+}}
+Start-Sleep -Milliseconds 800
 Pump
 Write-Log 'replacing'
 if ($detail -ne $null) {{
@@ -376,7 +409,7 @@ if ($detail -ne $null) {{
     Pump
 }}
 $copied = $false
-for ($attempt = 1; $attempt -le 60; $attempt++) {{
+for ($attempt = 1; $attempt -le 80; $attempt++) {{
     try {{
         if (Test-Path -LiteralPath $target) {{
             Move-Item -LiteralPath $target -Destination ($target + '.old') -Force -ErrorAction Stop
@@ -387,7 +420,24 @@ for ($attempt = 1; $attempt -le 60; $attempt++) {{
     }} catch {{
         Write-Log ("retry " + $attempt + " " + $_.Exception.Message)
         Pump
-        Start-Sleep -Milliseconds 500
+        Start-Sleep -Milliseconds 400
+    }}
+}}
+function Start-Installed {{
+    try {{
+        Start-Process -FilePath $target -WorkingDirectory (Split-Path -Parent $target)
+        Write-Log 'launched'
+        return $true
+    }} catch {{
+        Write-Log ("start failed " + $_.Exception.Message)
+        try {{
+            cmd.exe /c start "" $target
+            Write-Log 'launched-cmd'
+            return $true
+        }} catch {{
+            Write-Log ("cmd start failed " + $_.Exception.Message)
+            return $false
+        }}
     }}
 }}
 if ($copied) {{
@@ -398,35 +448,27 @@ if ($copied) {{
     Remove-Item -LiteralPath ($target + '.old') -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $downloaded -Force -ErrorAction SilentlyContinue
     Write-Log 'starting'
-    try {{
-        Start-Process -FilePath $target -WorkingDirectory (Split-Path -Parent $target)
-        Write-Log 'launched'
-        if ($form -ne $null) {{ $form.Close() }}
-        exit 0
-    }} catch {{
-        Write-Log ("start failed " + $_.Exception.Message)
-    }}
+    Start-Installed | Out-Null
+    if ($form -ne $null) {{ $form.Close() }}
+    exit 0
 }}
 Write-Log 'failed'
 $old = $target + '.old'
 if (Test-Path -LiteralPath $old) {{
     Move-Item -LiteralPath $old -Destination $target -Force -ErrorAction SilentlyContinue
-    try {{
-        Start-Process -FilePath $target -WorkingDirectory (Split-Path -Parent $target)
-        Write-Log 'restored'
-    }} catch {{
-        Write-Log ("restore start failed " + $_.Exception.Message)
-    }}
+    Write-Log 'restored'
 }}
+Start-Installed | Out-Null
 if ($form -ne $null) {{ $form.Close() }}
 exit 1
 """
     script.write_text(body, encoding="utf-8-sig")
     stale = install_directory() / "apply-update.bat"
     stale.unlink(missing_ok=True)
+    helper = str(powershell) if powershell.is_file() else "powershell"
     _detached(
         [
-            "powershell",
+            helper,
             "-NoProfile",
             "-STA",
             "-ExecutionPolicy",
@@ -438,3 +480,4 @@ exit 1
         ],
         target.parent,
     )
+    time.sleep(0.6)

@@ -753,6 +753,10 @@ class DiffusionApp:
             self._end_update_check()
             messagebox.showerror("Updates", str(error), parent=self.root)
             return
+        try:
+            self.root.destroy()
+        except tk.TclError:
+            pass
         os._exit(0)
 
     def _build_ui(self) -> None:
