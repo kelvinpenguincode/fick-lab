@@ -1,10 +1,19 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import sys
+from pathlib import Path
+
+python_dir = Path(getattr(sys, "base_prefix", sys.prefix))
+runtime_binaries = []
+for name in ("vcruntime140.dll", "vcruntime140_1.dll", "python3.dll"):
+    candidate = python_dir / name
+    if candidate.is_file():
+        runtime_binaries.append((str(candidate), "."))
 
 a = Analysis(
     ['launch_splash.py'],
     pathex=[],
-    binaries=[],
+    binaries=runtime_binaries,
     datas=[('github_repo.txt', '.')],
     hiddenimports=['diffusion_app', 'splash_window', 'scenario1', 'scenario2', 'scenario3', 'updater', 'app_version', 'arrhenius'],
     hookspath=[],
@@ -40,7 +49,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
     upx_exclude=[],
     runtime_tmpdir=None,
     console=False,
